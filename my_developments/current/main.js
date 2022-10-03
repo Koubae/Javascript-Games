@@ -1,5 +1,7 @@
 ;(() => {
 
+
+
     function Ball(canvas, ctx) {
         this.x = 250;
         this.y = 250;
@@ -66,8 +68,6 @@
         const FONT_COLOR = `rgb(255, 255, 255)`;
 
 
-
-
         let screenWidth = window.innerWidth;
         let screenHeight = window.innerHeight;
         let backgroundGradient;
@@ -123,7 +123,7 @@
             const tNow = window.performance.now();
             let diff = Math.abs(game.CURRENT_GAME_TIME - tNow).toFixed(4);
 
-            ctx.fillText(value + " " + diff + " " + game.CURRENT_GAME_TIME + " | tNow " + tNow, 500, 150);
+            ctx.fillText(`  ${random(1, 1000)} ` + value + " " + diff + " " + game.CURRENT_GAME_TIME + " | tNow " + tNow, 500, 150);
 
         }
 
@@ -155,6 +155,8 @@
         // --------------------------
         // resize the canvas to fill browser window dynamically
         window.addEventListener('resize', resizeCanvas, false);
+        document.addEventListener("keydown", keyDownHandler, false);
+        document.addEventListener("keyup", keyUpHandler, false);
 
         /**
          * Resize the canvas
@@ -171,12 +173,34 @@
             // draw(); // becareful with this
         }
 
-
-        document.addEventListener("keydown", (e) => {
-            if (e.key === "Insert") {
-                toggleFullScreen(); // @credit: https://developer.mozilla.org/en-US/docs/Web/API/Fullscreen_API#simple_fullscreen_usage
+        function keyDownHandler(e) {
+            if (!("code" in e)) {
+                return;
             }
-        }, false);
+
+            switch (e.code) {
+
+                case "Insert":
+                    toggleFullScreen(); // @credit: https://developer.mozilla.org/en-US/docs/Web/API/Fullscreen_API#simple_fullscreen_usage
+                    break;
+                default:
+                    return;
+            }
+
+        }
+
+        function keyUpHandler(e) {
+            if (!("code" in e)) {
+                return;
+            }
+
+            switch (e.code) {
+
+                default:
+                    return;
+            }
+        }
+
 
         // @credit: https://developer.mozilla.org/en-US/docs/Web/API/Fullscreen_API#simple_fullscreen_usage
         function toggleFullScreen() {
