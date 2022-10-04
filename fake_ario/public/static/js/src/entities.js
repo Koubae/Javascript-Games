@@ -43,7 +43,7 @@ function Ball(canvas, ctx) {
     this.MAX_SPEED = 10;
     this.MIN_SPEED = 0.15;
     this.BASE_SPEED = this.MAX_SPEED / 2;
-    this.ATTRACTION = 1.5;
+    this.ATTRACTION = 0.5;
 
     this.ctx = ctx;
     this.canvas = canvas;

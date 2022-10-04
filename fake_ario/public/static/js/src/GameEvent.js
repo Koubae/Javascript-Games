@@ -6,14 +6,15 @@
 const GameEvents = {
     game: undefined,
     // Mouse Events
-    OnClick(e) {
-        this.game.clickX = e.clientX;
-        this.game.clickY = e.clientY;
-        this.game.clickClock = this.game.GAME_CLOCK;
+    OnClick(callback, e) {
+        callback(e);
 
     },
     OnMouseUp(e) {
 
+    },
+    OnMouseMove(callback, e) {
+        callback(e);
     },
 
     // Keyboard Events
@@ -43,10 +44,22 @@ const GameEvents = {
         }
     },
     resizeCanvas(e) {
-        this.game.screenWidth = window.innerWidth;
-        this.game.screenHeight = window.innerHeight;
+
+        this.game.screenWidth = window.innerWidth * 2;
+        this.game.screenHeight = window.innerHeight * 2;
         this.game.canvas.width = this.game.screenWidth;
         this.game.canvas.height = this.game.screenHeight;
+
+        if (this.game.constants.BACKGROUND_TYPE === 'svg' && this.game.background !== undefined) {
+            let background = this.game.background;
+            if (background) {
+                background.style.width = `${this.game.screenWidth}px` ;
+                background.style.height = `${this.game.screenHeight}px`;
+            }
+
+        }
+
+
         /**
          * Your drawings need to be inside this function otherwise they will be reset when
          * you resize the browser window and the canvas goes will be cleared.
