@@ -15,7 +15,7 @@ function Game(canvas) {
     const FONT_FAMILY = "serif";
     const FONT_COLOR = `rgb(255, 255, 255)`;
 
-    const FOOD_COUNT = 150;
+    const FOOD_COUNT = 350;
 
     this.canvas = canvas;
     this.ctx = undefined;
@@ -168,7 +168,6 @@ function Game(canvas) {
         this.renderFoods(); // TODO: use a worker(s) to update the food.
         // Add Game Updates here
         this.cell.update(this.clickX, this.clickY, this.clickClock, this.zoom);
-
         // WORLD
         this.cameraUpdate();
 

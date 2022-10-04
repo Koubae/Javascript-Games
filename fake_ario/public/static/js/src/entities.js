@@ -97,6 +97,32 @@ Cell.prototype.update = function (clickX, clickY, clickClock, zoom) {
 
 }
 
+/// Entity Actions
+Cell.prototype.eat = function(entity, diffX, diffY) {
+    if (Math.abs(diffX) > this.mass - 10 || Math.abs(diffY) > this.mass - 10) {
+        return false;
+    }
+    let massAcquired = entity.mass / 30;
+    // the gravity must increase at least the same as the mass, otherwise the gravity force will reduce!!!
+    // why? Well, the gravity is nothing more that the 'distance from the center of the Cell to outside of is radius
+    // until where it can start to attract other masses. So if is growing, its radius is growing too and hence
+    // its gravity should. To keep the gravity force always at the same strength then add the new mass.
+    // if need to increase gravity force each time a new mass is eaten. then add the quantity of the new mass
+    // plus a tiny bit more
+    let gravityAcquired = entity.mass / 25;
+    // The cell, will loose its total speed equal to 1/30th of the new mass acquired. everything in life has a price :/
+    let speedDecreased = massAcquired / 30;
+
+    // upgrade the Cell
+    this.mass += massAcquired;
+    this.gravity += gravityAcquired;
+    this.MAX_SPEED -= speedDecreased;
+    return true;
+
+}
+
+/// Entity physics
+
 Cell.collisionWallType = 'stopMotion';
 if (Cell.collisionWallType === 'bounce') {
     Cell.prototype.collisionDetect = CollisionWallBounce;
@@ -130,17 +156,9 @@ Food.prototype.update = function (cell) {
     let diffY = cell.y - foodY;
     let distance = Math.max(0, Math.sqrt(diffX * diffX + diffY * diffY));
     if (Math.abs(diffX) < cell.gravity && Math.abs(diffY) < cell.gravity) {
-        if (Math.abs(diffX) < cell.mass - 10 && Math.abs(diffY) < cell.mass - 10) {
-            cell.mass += this.mass / 30;
-            // the gravity must increase at least the same as the mass, otherwise the gravity force will reduce!!!
-            // why? Well, the gravity is nothing more that the 'distance from the center of the Cell to outside of is radius
-            // until where it can start to attract other masses. So if is growing, its radius is growing too and hence
-            // its gravity should. To keep the gravity force always at the same strength then add the new mass.
-            // if need to increase gravity force each time a new mass is eaten. then add the quantity of the new mass
-            // plus a tiny bit more
-            cell.gravity += this.mass / 25;
-            return false
-        }
+        let isEaten = cell.eat(this, diffX, diffY);
+        if (isEaten) return false;
+
         this.x += (diffX / distance) * 2;
         this.y += (diffY / distance) * 2;
     }
