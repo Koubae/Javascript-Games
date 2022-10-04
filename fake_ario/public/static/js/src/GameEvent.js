@@ -17,6 +17,35 @@ const GameEvents = {
         callback(e);
     },
 
+    OnMouseWheel(callback, e) {
+        let deltaY = e.deltaY;
+        let moving = deltaY < 0 ? "up" : "down";
+
+        const zoomBy = 1.1;
+
+        if (moving === "up") {
+            this.game.zoom += 0.1;
+            if (this.game.zoom > this.game.zoomInMax) this.game.zoom = this.game.zoomInMax;
+                                       // zoom in amount
+            // this.game.scaleAt("zoomIn");
+
+        } else {
+            this.game.zoom -= 0.1;
+            if (this.game.zoom < this.game.zoomOutMax) this.game.zoom = this.game.zoomOutMax;
+                                       // zoom in amount
+            // this.game.scaleAt("zoomOut"); // will zoom out by same amount at mouse x,y
+
+        }
+
+
+
+        // this.game.ctx.translate(this.game.ball.x,this.game.ball.y);
+        // this.game.ctx.scale(this.game.zoom,this.game.zoom);
+        // this.game.ctx.translate(-this.game.ball.x,-this.game.ball.y);
+
+
+    },
+
     // Keyboard Events
     keyDownHandler(e) {
         if (!("code" in e)) {

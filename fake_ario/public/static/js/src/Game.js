@@ -3,7 +3,8 @@
 // Classes
 import GameEngine from "./GameEngine.js";
 import GameEvents from "./GameEvent.js";
-import {Ball} from "./entities.js";
+import {Cell, Food} from "./entities.js";
+import {random} from "./utils.js";
 
 function Game(canvas) {
     const BACKGROUND_COLOR = `rgba(0, 0, 0)`;
@@ -13,6 +14,8 @@ function Game(canvas) {
     const FONT_SIZE = "55px";
     const FONT_FAMILY = "serif";
     const FONT_COLOR = `rgb(255, 255, 255)`;
+
+    const FOOD_COUNT = 150;
 
     this.canvas = canvas;
     this.ctx = undefined;
@@ -34,8 +37,9 @@ function Game(canvas) {
     this.clickX = undefined;
     this.clickY = undefined;
 
-    this.screenX = 0;
-    this.screenY = 0;
+    this.zoom = 1;
+    this.zoomOutMax = 0.1;
+    this.zoomInMax = 5;
 
 
     this.constants = Object.freeze({
@@ -46,6 +50,8 @@ function Game(canvas) {
         FONT_SIZE: FONT_SIZE,
         FONT_FAMILY: FONT_FAMILY,
         FONT_COLOR: FONT_COLOR,
+
+        FOOD_COUNT: FOOD_COUNT,
     })
 
     this.constructor = function () {
@@ -76,7 +82,7 @@ function Game(canvas) {
                     <rect width="100%" height="100%" fill="url(#grid)"/>
                 </svg>
             `;
-            background.style.width = `${this.screenWidth}px` ;
+            background.style.width = `${this.screenWidth}px`;
             background.style.height = `${this.screenHeight}px`;
             document.body.insertBefore(background, this.canvas);
             this.background = background;
@@ -108,7 +114,8 @@ function Game(canvas) {
     }, false);
     document.addEventListener('mouseup', this.gameEvents.OnMouseUp.bind(this.gameEvents), false);
     document.addEventListener('mousemove', this.gameEvents.OnMouseMove.bind(this.gameEvents, this.updatePointerPosition.bind(this)), false);
-
+    document.addEventListener('wheel', this.gameEvents.OnMouseWheel.bind(this.gameEvents, () => {
+    }));
     // Keyboard Events
     document.addEventListener("keydown", this.gameEvents.keyDownHandler.bind(this.gameEvents), false);
     document.addEventListener("keyup", this.gameEvents.keyUpHandler.bind(this.gameEvents), false);
@@ -118,28 +125,82 @@ function Game(canvas) {
     // --------------------------
 
     // Game Entities Declarations here
-    this.ball = new Ball(canvas, this.ctx);
+    this.cell = new Cell(canvas, this.ctx);
     // the render logic should be focus ing on the rendering
+    this.foods = [];
+    for (let i = 0; i < FOOD_COUNT; i++) {
+        let food = this.makeFood();
+        this.foods.push(food);
+    }
 
 
-    const MAX_SMOOTH = 3;
-    this.cameraSmooth = 2;
+
+    // TODO: zoom-in / zoom-out currently is not working and is a mess!
+
+    // const zoomBy = 1.1;
+    // this.origin = {x: 0, y: 0};         // canvas origin
+    // this.scale = 1;                     // current scale
+    // const scaleMax = 1.2;
+    // const scaleMin = 0.6;
+    // this.scaleAt = function (direction) {  // at pixel coords x, y scale by scaleBy
+    //     let x = this.cell.x;
+    //     let y = this.cell.y;
+    //
+    //     let scaleBy = zoomBy;
+    //     if (direction === "zoomOut") {
+    //         scaleBy = 1 / scaleBy;
+    //     }
+    //     this.scale *= scaleBy;
+    //     this.scale = Math.round((this.scale + Number.EPSILON) * 100) / 100;
+    //     if (this.scale < scaleMin) this.scale = scaleMin;
+    //     if (this.scale > scaleMax) this.scale = scaleMax;
+    //     this.origin.x = x - (x - this.origin.x) * scaleBy;
+    //     this.origin.y = y - (y - this.origin.y) * scaleBy;
+    //     this.ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
+    //     // restore
+    //     // ctx.setTransform(1,0,0,1,0,0);
+    // }
 
 
     this.update = function () {
 
+        /// ENTITIES
+        this.renderFoods(); // TODO: use a worker(s) to update the food.
         // Add Game Updates here
-        this.ball.update(this.clickX, this.clickY, this.clickClock);
+        this.cell.update(this.clickX, this.clickY, this.clickClock, this.zoom);
+
+        // WORLD
+        this.cameraUpdate();
+
+        // TODO: zoom-in / zoom-out currently is not working and is a mess!
+        // this.ctx.translate(this.cell.x,this.cell.y);
+        // this.ctx.scale(this.zoom,this.zoom);
+        // this.ctx.translate(-this.cell.x,-this.cell.y);
 
 
-        let w = window.innerWidth;
-        let h = window.innerHeight;
-        window.scroll((this.ball.x + this.ball.velocityX)  - (w / 2)   , (this.ball.y + this.ball.velocityY) - (h / 2)  );
-
-
+        // this.ctx.font = '25px serif';
+        // this.ctx.fillStyle = "#000";
+        // this.ctx.fillText(
+        //     `scale(${this.scale}%)`,
+        //     this.cell.x - 50,
+        //     this.cell.y - 50
+        // );
+//         window.scroll(
+//     ((this.cell.x + this.cell.velocityX )  - (w / 2) ) * (this.zoom / 100),
+//     ((this.cell.y + this.cell.velocityY ) - (h / 2) )  * (this.zoom / 100)
+//         );
+//
+//         this.ctx.font = '25px serif';
+//         this.ctx.fillStyle = "#000";
+//         this.ctx.fillText(
+//             `scale(${this.zoom}%) |
+// X=${Math.floor(this.cell.velocityX)} Y=${Math.floor(this.cell.velocityX)}
+// PX=${Math.floor(this.cell.x)}, PY=${Math.floor(this.cell.y)}
+// CX=${this.clickX} , CY=${this.clickY}`,
+//             this.cell.x - 350,
+//             this.cell.y - 50
+//         );
     }
-
-
 
 
 }
@@ -148,10 +209,41 @@ function Game(canvas) {
 // Game Methods
 // --------------------------
 
-Game.prototype.updatePointerPosition = function(e) {
+Game.prototype.updatePointerPosition = function (e) {
     this.clickX = e.pageX;
     this.clickY = e.pageY;
     this.clickClock = this.GAME_CLOCK;
+}
+
+Game.prototype.cameraUpdate = function() {
+    let w = window.innerWidth;
+    let h = window.innerHeight;
+    window.scroll(
+        ((this.cell.x + this.cell.velocityX) - (w / 2)),
+        ((this.cell.y + this.cell.velocityY) - (h / 2))
+    );
+
+}
+
+Game.prototype.makeFood = function() {
+    const margin = 25;  // add / remove 25 as margin so that is not sticked to the walls
+    return new Food(
+        this.canvas,
+        this.ctx,
+        random(margin, this.canvas.width - margin),
+        random(margin, this.canvas.height - margin)
+    );
+}
+
+/**
+ * // TODO: use a worker(s) to update the food.
+ */
+Game.prototype.renderFoods = function() {
+    this.foods = this.foods.map(f => {
+        let isAlive = f.update(this.cell);
+        if (isAlive) return f;
+        return this.makeFood(); // is dead then we create a new food
+    });
 }
 
 
