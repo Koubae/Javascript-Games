@@ -167,7 +167,7 @@ function Game(canvas) {
         /// ENTITIES
         this.renderFoods(); // TODO: use a worker(s) to update the food.
         // Add Game Updates here
-        this.cell.update(this.clickX, this.clickY, this.clickClock, this.zoom);
+        this.cell.update(this.clickX, this.clickY, this.clickClock, this.GAME_CLOCK);
         // WORLD
         this.cameraUpdate();
 
@@ -239,7 +239,7 @@ Game.prototype.makeFood = function() {
  */
 Game.prototype.renderFoods = function() {
     this.foods = this.foods.map(f => {
-        let isAlive = f.update(this.cell);
+        let isAlive = f.update(this.cell, this.clickClock, this.GAME_CLOCK);
         if (isAlive) return f;
         return this.makeFood(); // is dead then we create a new food
     });
