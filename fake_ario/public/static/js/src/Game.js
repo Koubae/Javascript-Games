@@ -3,7 +3,7 @@
 // Classes
 import GameEngine from "./GameEngine.js";
 import GameEvents from "./GameEvent.js";
-import {Cell, Food} from "./entities.js";
+import {Cell, CellBot, Food} from "./entities.js";
 import {random} from "./utils.js";
 
 function Game(canvas) {
@@ -133,6 +133,16 @@ function Game(canvas) {
         this.foods.push(food);
     }
 
+    this.cellBots = [];
+    this.cellBots.push(
+        new CellBot(
+            this.canvas,
+            this.ctx,
+            700,
+            500
+        )
+    );
+
 
 
     // TODO: zoom-in / zoom-out currently is not working and is a mess!
@@ -166,8 +176,23 @@ function Game(canvas) {
 
         /// ENTITIES
         this.renderFoods(); // TODO: use a worker(s) to update the food.
+
+        let self = this;
+        this.cellBots = this.cellBots.reduce(function(result, bot) {
+            let alive = bot.update(self.cell, self.clickClock, self.GAME_CLOCK);
+            if (alive) {
+                result.push(bot);
+            }
+            return result;
+        }, []);
+
         // Add Game Updates here
-        this.cell.update(this.clickX, this.clickY, this.clickClock, this.GAME_CLOCK);
+        if (!this.cell.isDead()) {
+            this.cell.update(this.clickX, this.clickY, this.clickClock, this.GAME_CLOCK);
+        }
+
+
+
         // WORLD
         this.cameraUpdate();
 
