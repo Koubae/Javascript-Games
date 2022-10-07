@@ -139,24 +139,24 @@ Cell.prototype.draw = function (gameClock) {
 
 }
 
-Cell.prototype.update = function (clickX, clickY, clickClock, gameClock, worldSections) {
+Cell.prototype.update = function () {
     this.underOtherCellGravity = false;
-    this.draw(gameClock);
+    this.draw(this.game.GAME_CLOCK);
 
-    clickX = clickX ? clickX : 0;
-    clickY = clickY ? clickY : 0;
+    const clickX = this.game.clickX ? this.game.clickX : 0;
+    const clickY = this.game.clickY ? this.game.clickY : 0;
 
     //
     /* register Last Movement
         NOTE: If the lastMovementTimestamp is not equal to the current clickClock, the user
         clicked for a new movement so we need to register it!
      */
-    if (this.lastMovementTimeStamp !== clickClock) {
-        this.lastMovementTimeStamp = clickClock;
+    if (this.lastMovementTimeStamp !== this.game.clickClock) {
+        this.lastMovementTimeStamp = this.game.clickClock;
         this.changeDirection(clickX, clickY);
     }
 
-    this._update(worldSections);
+    this._update();
 
 
 }
@@ -176,7 +176,7 @@ Cell.prototype.changeDirection = function (directionX, directionY) {
     this.velocityY = (diff_y / distance) * speed;
 }
 
-Cell.prototype._update = function(worldSections) {
+Cell.prototype._update = function() {
     if (this.isDead()) return false;
 
     let leftTop = [(this.x - this.mass)+-this.gravity/2, (this.y - this.mass)+-this.gravity/2];
@@ -198,9 +198,9 @@ Cell.prototype._update = function(worldSections) {
     let entityNextUpdate = new Set();
     for (let a = top[0]; a < top[1]+1; a++) {
         if (this.isDead()) break;
-        if (!(a in worldSections)) continue;
+        if (!(a in this.game.worldSections)) continue;
 
-        let cols = worldSections[a];
+        let cols = this.game.worldSections[a];
         for (let i = left[0]; i < left[1]+1; i++) {
             if (this.isDead()) break;
             if (!(i in cols)) continue;
@@ -347,40 +347,11 @@ function Food(game, x, y) {
 Food.prototype.draw = Cell.prototype.draw;
 Food.prototype.die = Cell.prototype.die;
 Food.prototype.isDead = Cell.prototype.isDead;
-Food.prototype.update = function (cells, clickClock, gameClock, worldSections) {
+Food.prototype.update = function () {
     this.underOtherCellGravity = false;
-    if (this.lastMovementTimeStamp !== clickClock) {
-        this.lastMovementTimeStamp = clickClock;
+    if (this.lastMovementTimeStamp !== this.game.clickClock) {
+        this.lastMovementTimeStamp = this.game.clickClock;
     }
-    // Algorithm to move object X towards target Y
-    // 1) calculate x,y difference between object and target. target is the Minuend and object the Subtrahend
-    // 2) Get the distance. Square Root of diffX **2 + diffY **2
-    // 3) Check that diffX is less than gravity
-    // for (let i = 0; i < cells.length; i++) { // NOTE: The first cell is always the 'Player' cell
-    //     let cell = cells[i];
-    //     let [distance, diffX, diffY] = calculateDistance(cell, this);
-    //     if (checkEntityProximity(diffX, diffY, cell.gravity)) {
-    //         let isEaten = cell.eat(this, diffX, diffY);
-    //         if (isEaten) return false;
-    //
-    //         let [gravityPullX, gravityPullY] = calculateGravityPull(
-    //             [distance, diffX, diffY],
-    //             this,
-    //             cell
-    //         );
-    //
-    //         this.x += gravityPullX;
-    //         this.y += gravityPullY;
-    //     }
-    // }
-    // let currentPosition = Math.floor((this.x+this.y) / 64);
-    // if (currentPosition in worldSections) {
-    //     let entity = worldSections[currentPosition];
-    //     let index = entity.indexOf(this);
-    //     if (index !== -1) {
-    //         entities.splice(y, 1);
-    //     }
-    // }
 
     this.draw(null);
     return !this.isDead();
@@ -403,15 +374,15 @@ function CellBot(game, x, y) {
 CellBot.prototype.draw = Cell.prototype.draw;
 CellBot.prototype.die = Cell.prototype.die;
 CellBot.prototype.isDead = Cell.prototype.isDead;
-CellBot.prototype.update = function (cell, clickClock, gameClock, worldSections) {
+CellBot.prototype.update = function () {
     this.underOtherCellGravity = false;
-    this.draw(gameClock);
+    this.draw(this.game.GAME_CLOCK);
     let movementChange = random(0, this.cellActivityRangeMax);
     if (movementChange === 0) {
         this.changeDirection(random(0, this.canvas.width - 1), random(0, this.canvas.height - 1));
     }
 
-    this._update(worldSections);
+    this._update();
     return !this.isDead();
 }
 

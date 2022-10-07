@@ -225,17 +225,17 @@ function Game(canvas) {
         // TODO: use a worker(s) to update the food.(or anything really!!!)
         foods.forEach(cell => {           
             if (!cell.isDead()) {
-                cell.update([self.cell, ...[]], self.clickClock, self.GAME_CLOCK, self.worldSections);
+                cell.update();
             } 
         });
         bots.forEach(cell => {
             if (!cell.isDead()) {
-                cell.update(self.cell, self.clickClock, self.GAME_CLOCK, self.worldSections);
-            }        
+                cell.update();
+            }
         });
         players.forEach(cell => {       
             if (!cell.isDead()) {
-                cell.update(self.clickX, self.clickY, self.clickClock, self.GAME_CLOCK, self.worldSections);
+                cell.update();
             }
         });
 
