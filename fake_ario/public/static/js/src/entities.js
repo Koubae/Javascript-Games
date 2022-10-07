@@ -13,7 +13,6 @@ import {
     animationBacteriaOne
 } from "./animations/entityAnimations.js";
 
-const DEBUG = true;
 
 // TODO: Create Vector Object
 /**
@@ -127,7 +126,7 @@ Cell.prototype.draw = function (gameClock) {
         this.animation(gameClock);
     }
 
-    if (DEBUG) {
+    if (this.game.constants.DEBUG) {
         this.ctx.font = '10px serif';
         this.ctx.fillStyle = "#000";
         this.ctx.fillText(
@@ -188,7 +187,7 @@ Cell.prototype._update = function() {
     let left = [Math.floor((Math.max(0, leftTop[0] )) / 64), Math.floor((Math.max(0, rightTop[0] )) / 64)];
     let top = [Math.floor((Math.max(0, leftTop[1] )) / 64), Math.floor((Math.max(0, rightBottom[1] )) / 64)];
 
-    if (DEBUG) { // draw 4 dots around the cell which is the visual cell boundary where the cell can start detect other entities
+    if (this.game.constants.DEBUG) { // draw 4 dots around the cell which is the visual cell boundary where the cell can start detect other entities
         circle(this.ctx, leftTop[0], leftTop[1], 2, "rgb(0, 0, 255)");
         circle(this.ctx, rightTop[0], rightTop[1], 2, "rgb(0, 0, 255)");
         circle(this.ctx, leftBottom[0], leftBottom[1], 2, "rgb(0, 0, 255)");
@@ -210,7 +209,7 @@ Cell.prototype._update = function() {
                 let entity = entities[y];
                 if (entity === this) continue;
                 entity.underOtherCellGravity = true;
-                if (DEBUG) entity.color = "rgb(255, 0, 0)";
+                if (this.game.constants.DEBUG) entity.color = "rgb(255, 0, 0)";
 
                 if (this.gravity > entity.gravity) {
                     let [distance, diffX, diffY] = calculateDistance(this, entity);

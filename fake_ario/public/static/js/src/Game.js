@@ -204,40 +204,18 @@ function Game(canvas) {
             }
         }
 
-        let players = [];
-        let bots = [];
-        let foods= [];
+        // TODO: use a worker(s) to update the food.(or anything really!!!)
         for (const [_, data] of Object.entries(this.worldSections)) {
             for (const [__, col] of Object.entries(data)) {
+                // todo: we iterate only once, but cell types (cell, food, cellBot) are not ordered)
+                // so depending on how the cell are drown, may be one on top of another.
                 col.forEach(c => {
-                    if (c.type === 'cell') {
-                        players.push(c);
-                    } else if (c.type === 'cellBot') {
-                        bots.push(c);
-                    } else if (c.type === 'food') {
-                        foods.push(c);
+                    if (!c.isDead()) {
+                        c.update();
                     }
                 });
             }
         }
-
-
-        // TODO: use a worker(s) to update the food.(or anything really!!!)
-        foods.forEach(cell => {           
-            if (!cell.isDead()) {
-                cell.update();
-            } 
-        });
-        bots.forEach(cell => {
-            if (!cell.isDead()) {
-                cell.update();
-            }
-        });
-        players.forEach(cell => {       
-            if (!cell.isDead()) {
-                cell.update();
-            }
-        });
 
 
         // WORLD
