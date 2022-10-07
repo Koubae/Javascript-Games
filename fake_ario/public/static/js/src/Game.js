@@ -128,59 +128,29 @@ function Game(canvas) {
     // --------------------------
     // Game Logic
     // --------------------------
+    // TODO: write docu. Mapping matrix containing Y (columns) and then X (ROW) and a Collection (Array) of object /entiteis
     this.worldSections = {};
-    // let chunkNumber = 1;
-    // for (let y = CHUNK_SIZE; y < this.canvas.height + CHUNK_SIZE; y += CHUNK_SIZE) {
-    //     for (let i = CHUNK_SIZE; i < this.canvas.width + CHUNK_SIZE; i += CHUNK_SIZE) {
-    //         this.worldSections[chunkNumber] = []
-    //         chunkNumber += 1;
-    //     }
-    // }
-
 
     // Game Entities Declarations here
-    this.cell = new Cell(canvas, this.ctx, 250, 250);
-    let cellPosY = Math.floor((250) / CHUNK_SIZE);
-    let cellPosX = Math.floor((250) / CHUNK_SIZE);
-    if (!(cellPosY in this.worldSections)) {
-        this.worldSections[cellPosY] = {};
-    }
+    const playerXPos = 250;
+    const playerYPos = 250;
+    this.cell = new Cell(this, playerXPos, playerYPos);
+    this.addEntityWorldChunk(this.cell);
 
-    if (cellPosX in this.worldSections[cellPosY]) {
-        this.worldSections[cellPosY][cellPosX].push(this.cell);
-    } else {
-        this.worldSections[cellPosY][cellPosX] = [this.cell];
-    }
 
 
     // the render logic should be focus ing on the rendering
-    this.foods = [];
     for (let i = 0; i < FOOD_COUNT; i++) {
-        let food = this.makeFood();
-        this.foods.push(food);
+        this.makeFood();
     }
 
-    this.cellBots = [];
     for (let i = 0; i < 1; i++) {
         let cellBoot = new CellBot(
-            this.canvas,
-            this.ctx,
+            this,
             700,
             500
         );
-        let cellPosY = Math.floor((500) / this.constants.CHUNK_SIZE);
-        let cellPosX = Math.floor((700) / this.constants.CHUNK_SIZE);
-        if (!(cellPosY in this.worldSections)) {
-            this.worldSections[cellPosY] = {};
-        }
-
-        if (cellPosX in this.worldSections[cellPosY]) {
-            this.worldSections[cellPosY][cellPosX].push(cellBoot);
-        } else {
-            this.worldSections[cellPosY][cellPosX] = [cellBoot];
-        }
-
-        this.cellBots.push(cellBoot);
+        this.addEntityWorldChunk(cellBoot);
     }
 
     // this.cells = [this.cell, ...this.cellBots, ...this.foods];
@@ -225,65 +195,49 @@ function Game(canvas) {
             try {
                 // makes all entities green for debugging purposes
                 entityGroups.forEach(
-                    group => Object.entries(group[1]).forEach(row => row[1].forEach(e => e.color = "rgb(0, 255, 0)")))
+                    group => Object.entries(group[1]).forEach(row => row[1].forEach(e => {
+                        if (!e.underOtherCellGravity) e.color = "rgb(0, 255, 0)";
+                    })))
                 ;
             } catch (e) {
                 console.error(`Error while making entities green (DEBUG) | Error ${e}`)
             }
-
         }
+
         let players = [];
         let bots = [];
         let foods= [];
-        for (const [coordY, data] of Object.entries(this.worldSections)) {
-            for (const [coordX, col] of Object.entries(data)) {
+        for (const [_, data] of Object.entries(this.worldSections)) {
+            for (const [__, col] of Object.entries(data)) {
                 col.forEach(c => {
-                    if (!c) {
-                        console.log("opps " + coordY + " " + coordX + " no data")
-                        return;
-
-                    }
                     if (c.type === 'cell') {
                         players.push(c);
                     } else if (c.type === 'cellBot') {
                         bots.push(c);
                     } else if (c.type === 'food') {
                         foods.push(c);
-                    } else {
-                        console.log("opps " + coordY + " " + coordX + " no cell type!!!")
-                        return;
                     }
-
-
                 });
             }
-
         }
 
 
         // TODO: use a worker(s) to update the food.(or anything really!!!)
-
-
-        foods.forEach(cell => {
-            let isAlive = cell.update([self.cell, ...self.cellBots], self.clickClock, self.GAME_CLOCK, self.worldSections);
-            if (isAlive) return cell;
-            return self.makeFood(); // is dead then we create a new food
+        foods.forEach(cell => {           
+            if (!cell.isDead()) {
+                cell.update([self.cell, ...[]], self.clickClock, self.GAME_CLOCK, self.worldSections);
+            } 
         });
-
-        players.forEach(cell => {
-            // Add Game Updates here
+        bots.forEach(cell => {
+            if (!cell.isDead()) {
+                cell.update(self.cell, self.clickClock, self.GAME_CLOCK, self.worldSections);
+            }        
+        });
+        players.forEach(cell => {       
             if (!cell.isDead()) {
                 cell.update(self.clickX, self.clickY, self.clickClock, self.GAME_CLOCK, self.worldSections);
             }
         });
-        bots.forEach(cell => {
-            let alive = cell.update(self.cell, self.clickClock, self.GAME_CLOCK, self.worldSections);
-            if (!alive) {
-            }
-        });
-
-        let a = players[0];
-       if (a)  console.log(`player is dead ${a.isDead()}`)
 
 
         // WORLD
@@ -344,28 +298,13 @@ Game.prototype.cameraUpdate = function() {
 
 Game.prototype.makeFood = function() {
     const margin = 25;  // add / remove 25 as margin so that is not sticked to the walls
-    let foodX = random(margin, this.canvas.width - margin);
-    let foodY = random(margin, this.canvas.height - margin);
     let food =  new Food(
-        this.canvas,
-        this.ctx,
-        foodX,
-        foodY
+        this,
+        random(margin, this.canvas.width - margin),
+        random(margin, this.canvas.height - margin)
     );
 
-    let cellPosY = Math.floor((foodY) / this.constants.CHUNK_SIZE);
-    let cellPosX = Math.floor((foodX) / this.constants.CHUNK_SIZE);
-    if (!(cellPosY in this.worldSections)) {
-        this.worldSections[cellPosY] = {};
-    }
-
-    if (cellPosX in this.worldSections[cellPosY]) {
-        this.worldSections[cellPosY][cellPosX].push(food);
-    } else {
-        this.worldSections[cellPosY][cellPosX] = [food];
-    }
-
-
+    this.addEntityWorldChunk(food);
     return food
 }
 
@@ -378,6 +317,63 @@ Game.prototype.renderFoods = function() {
         if (isAlive) return f;
         return this.makeFood(); // is dead then we create a new food
     });
+}
+
+
+// Utils methods
+
+Game.prototype.addEntityWorldChunk = function(entity) {
+    const [cellPosX, cellPosY] = this.calculateGameChunk(entity.x, entity.y);
+    if (!(cellPosY in this.worldSections)) {
+        this.worldSections[cellPosY] = {};
+    }
+
+    if (cellPosX in this.worldSections[cellPosY]) {
+        this.worldSections[cellPosY][cellPosX].push(entity);
+    } else {
+        this.worldSections[cellPosY][cellPosX] = [entity];
+    }
+}
+
+Game.prototype.removeEntityWorldChunk = function(entity) {
+    const [cellPosX, cellPosY] = this.calculateGameChunk(entity.x, entity.y);
+    // Now, we delete the reference for garbage collection
+    if (cellPosY in this.worldSections && cellPosX in this.worldSections[cellPosY]) {
+        let entities = this.worldSections[cellPosY][cellPosX];
+        let index = entities.indexOf(entity);
+        if (index !== -1) {
+            entities.splice(index, 1);
+        }
+        if (entities.length <= 0) {
+            delete this.worldSections[cellPosY][cellPosX];
+        }
+    }
+}
+
+/**
+ * Given a X,y coordinate, calculate the chunk game section for x and y.
+ * So for instance.
+ *
+ * let chunk = 64;
+ * X = 128 (64 * 2) so we do 128 / chunk = 2 (rounded)
+ * X = 120 / chunk = 1 (rounded)
+ *
+ * The result is an Array containing the X,Y indexes of the this.worldSections
+ * so that we can do
+ *
+ * let [indexX, indexY] = Game.prototype.calculateGameChunk(128, 0);
+ *
+ * let entities: Array[entities] = this.worldSections[indexY][indexX]
+ *
+ * @param x
+ * @param y
+ * @returns {[number,number]} X index and Y index of the Game Mapping section
+ */
+Game.prototype.calculateGameChunk = function(x, y) {
+    return [
+        Math.floor(x / this.constants.CHUNK_SIZE),
+        Math.floor(y / this.constants.CHUNK_SIZE)
+    ];
 }
 
 

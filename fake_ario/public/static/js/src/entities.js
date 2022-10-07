@@ -72,7 +72,7 @@ function calculateGravityPull(spaces, entityA, entityB) {
 }
 
 
-function Cell(canvas, ctx, x, y) {
+function Cell(game, x, y) {
     this.type = "cell";
     // Movement
     this.MAX_SPEED = 15;
@@ -80,12 +80,14 @@ function Cell(canvas, ctx, x, y) {
     this.BASE_SPEED = this.MAX_SPEED / 2;
     this.ATTRACTION = 0.5;
 
-    this.ctx = ctx;
-    this.canvas = canvas;
+    this.game = game;
+    this.ctx = game.ctx;
+    this.canvas = game.canvas;
     this.x = x;
     this.y = y;
     this.mass = 50;
     this.gravity = this.mass + this.mass / 2;
+    this.underOtherCellGravity = false,
     this.velocityX = this.BASE_SPEED;
     this.velocityY = this.BASE_SPEED;
     this.lastMovementTimeStamp = 0;
@@ -105,10 +107,9 @@ Cell.prototype.isDead = function () {
     return this._dead;
 }
 
-Cell.prototype.die = function (entitiesMapping) {
+Cell.prototype.die = function () {
     // Hold previous x,y coordinates
-    let cellPosY = Math.floor(this.y / 64);
-    let cellPosX = Math.floor(this.x / 64);
+    this.game.removeEntityWorldChunk(this);
     this._dead = true;
     this.x = -1000; // update x,y coordinates so that go outside of the canvas view
     this.y = -1000;
@@ -116,16 +117,6 @@ Cell.prototype.die = function (entitiesMapping) {
     this.velocityY = 0;
     this.mass = 0;
     circle(this.ctx, this.x, this.y, this.mass, this.color); // Make sure is drawn away
-
-    // Now, we delete the reference for garbage collection
-    if (cellPosY in entitiesMapping && cellPosX in entitiesMapping[cellPosY]) {
-        let entities = entitiesMapping[cellPosY][cellPosX];
-        let index = entities.indexOf(this);
-        if (index !== -1) {
-            // delete entities[index];
-            entities.splice(index, 1);
-        }
-    }
 
 }
 
@@ -148,7 +139,8 @@ Cell.prototype.draw = function (gameClock) {
 
 }
 
-Cell.prototype.update = function (clickX, clickY, clickClock, gameClock, entitiesMapping) {
+Cell.prototype.update = function (clickX, clickY, clickClock, gameClock, worldSections) {
+    this.underOtherCellGravity = false;
     this.draw(gameClock);
 
     clickX = clickX ? clickX : 0;
@@ -164,7 +156,7 @@ Cell.prototype.update = function (clickX, clickY, clickClock, gameClock, entitie
         this.changeDirection(clickX, clickY);
     }
 
-    this._update(entitiesMapping);
+    this._update(worldSections);
 
 
 }
@@ -184,7 +176,7 @@ Cell.prototype.changeDirection = function (directionX, directionY) {
     this.velocityY = (diff_y / distance) * speed;
 }
 
-Cell.prototype._update = function(entitiesMapping) {
+Cell.prototype._update = function(worldSections) {
     if (this.isDead()) return false;
 
     let leftTop = [(this.x - this.mass)+-this.gravity/2, (this.y - this.mass)+-this.gravity/2];
@@ -196,27 +188,28 @@ Cell.prototype._update = function(entitiesMapping) {
     let left = [Math.floor((Math.max(0, leftTop[0] )) / 64), Math.floor((Math.max(0, rightTop[0] )) / 64)];
     let top = [Math.floor((Math.max(0, leftTop[1] )) / 64), Math.floor((Math.max(0, rightBottom[1] )) / 64)];
 
-    if (DEBUG) {
+    if (DEBUG) { // draw 4 dots around the cell which is the visual cell boundary where the cell can start detect other entities
         circle(this.ctx, leftTop[0], leftTop[1], 2, "rgb(0, 0, 255)");
         circle(this.ctx, rightTop[0], rightTop[1], 2, "rgb(0, 0, 255)");
         circle(this.ctx, leftBottom[0], leftBottom[1], 2, "rgb(0, 0, 255)");
         circle(this.ctx, rightBottom[0], rightBottom[1], 2, "rgb(0, 0, 255)");
     }
 
-
+    let entityNextUpdate = new Set();
     for (let a = top[0]; a < top[1]+1; a++) {
-        if (!(a in entitiesMapping)) continue;
-        let cols = entitiesMapping[a];
+        if (this.isDead()) break;
+        if (!(a in worldSections)) continue;
+
+        let cols = worldSections[a];
         for (let i = left[0]; i < left[1]+1; i++) {
+            if (this.isDead()) break;
             if (!(i in cols)) continue;
+
             let entities = cols[i];
-            let entStay = [];
             for (let y = 0; y < entities.length; y ++) {
                 let entity = entities[y];
-                if (entity === this) {
-                    entStay.push(entity);
-                    continue;
-                }
+                if (entity === this) continue;
+                entity.underOtherCellGravity = true;
                 if (DEBUG) entity.color = "rgb(255, 0, 0)";
 
                 if (this.gravity > entity.gravity) {
@@ -224,7 +217,7 @@ Cell.prototype._update = function(entitiesMapping) {
                     if (checkEntityProximity(diffX, diffY, this.gravity)) {
                         let isEaten = this.eat(entity, diffX, diffY);
                         if (isEaten) {
-                            entity.die(entitiesMapping);
+                            entity.die();
                             continue;
                         }
 
@@ -236,34 +229,16 @@ Cell.prototype._update = function(entitiesMapping) {
 
                         entity.x += gravityPullX;
                         entity.y += gravityPullY;
-                        let posY = Math.floor((entity.y) / 64);
-                        let posX = Math.floor((entity.x) / 64);
-                        if (posY === a && posX === i) {
-                            entStay.push(entity);
-                            continue;
-                        }
 
-                        if (!(posY in entitiesMapping)) {
-                            entitiesMapping[posY] = {};
-                        }
-                        if (posX in entitiesMapping[posY]) {
-                            entitiesMapping[posY][posX].push(entity);
-                        } else {
-                            entitiesMapping[posY][posX] = [entity];
-                        }
-
-
-                    } else {
-                        entStay.push(entity);
                     }
+
                 } else if (this.gravity < entity.gravity) {
-                    entStay.push(entity);
                     let [distance, diffX, diffY] = calculateDistance(entity, this);
                     if (checkEntityProximity(diffX, diffY, entity.gravity)) {
                         let isEaten = entity.eat(this, diffX, diffY);
                         if (isEaten) {
-                            this.die(entitiesMapping);
-                            return false;
+                            this.die();
+                            break;
                         }
 
                         let [gravityPullX, gravityPullY] = calculateGravityPull(
@@ -275,48 +250,23 @@ Cell.prototype._update = function(entitiesMapping) {
                         this.y += gravityPullY;
                     }
                 }
-
+                this.game.removeEntityWorldChunk(entity);
+                entityNextUpdate.add(entity);
             }
-            if (entStay.length) {
-                cols[i] = entStay;
-            } else {
-                delete cols[i];
-            }
-
-
         }
-
 
     }
 
+    entityNextUpdate.forEach(entity => {
+        this.game.addEntityWorldChunk(entity);
+    });
 
-    let cellPosY = Math.floor(this.y / 64);
-    let cellPosX = Math.floor(this.x / 64);
-    if (cellPosY in entitiesMapping && cellPosX in entitiesMapping[cellPosY]) {
-        let entities = entitiesMapping[cellPosY][cellPosX];
-        let index = entities.indexOf(this);
-        if (index !== -1) {
-            entities.splice(index, 1);
-        }
-        if (entities.length <= 0) {
-            delete entitiesMapping[cellPosY][cellPosX];
-        }
-    }
-
+    this.game.removeEntityWorldChunk(this);
     this.collisionDetect();
     this.x += this.velocityX;
     this.y += this.velocityY;
+    this.game.addEntityWorldChunk(this);
 
-    cellPosY = Math.floor(this.y / 64);
-    cellPosX = Math.floor(this.x / 64);
-    if (!(cellPosY in entitiesMapping)) {
-        entitiesMapping[cellPosY] = {};
-    }
-    if (cellPosX in entitiesMapping[cellPosY]) {
-        entitiesMapping[cellPosY][cellPosX].push(this);
-    } else {
-        entitiesMapping[cellPosY][cellPosX] = [this];
-    }
 }
 
 /// Entity Actions
@@ -347,6 +297,12 @@ Cell.prototype.eat = function (entity, diffX, diffY) {
     this.gravity += gravityAcquired;
     this.MAX_SPEED -= speedDecreased;
     this.animationTime += 0.5;
+
+    // Now if the cell eat, we send a signal to the game to generate a new food (if is food)
+    if (entity.type === "food") {
+        this.game.makeFood();
+    }
+
     return true;
 
 }
@@ -379,11 +335,9 @@ if (Cell.animationType === 'almostExploding') {
 }
 
 
-function Food(canvas, ctx, x, y) {
-    Cell.call(this, canvas, ctx);
+function Food(game, x, y) {
+    Cell.call(this, game, x, y);
     this.type = "food";
-    this.x = x;
-    this.y = y;
     this.mass = 50 / 4;
     this.gravity = this.mass + this.mass / 2;
     this.color = randomRGB();
@@ -393,8 +347,8 @@ function Food(canvas, ctx, x, y) {
 Food.prototype.draw = Cell.prototype.draw;
 Food.prototype.die = Cell.prototype.die;
 Food.prototype.isDead = Cell.prototype.isDead;
-Food.prototype.update = function (cells, clickClock, gameClock, entitiesMapping) {
-
+Food.prototype.update = function (cells, clickClock, gameClock, worldSections) {
+    this.underOtherCellGravity = false;
     if (this.lastMovementTimeStamp !== clickClock) {
         this.lastMovementTimeStamp = clickClock;
     }
@@ -420,8 +374,8 @@ Food.prototype.update = function (cells, clickClock, gameClock, entitiesMapping)
     //     }
     // }
     // let currentPosition = Math.floor((this.x+this.y) / 64);
-    // if (currentPosition in entitiesMapping) {
-    //     let entity = entitiesMapping[currentPosition];
+    // if (currentPosition in worldSections) {
+    //     let entity = worldSections[currentPosition];
     //     let index = entity.indexOf(this);
     //     if (index !== -1) {
     //         entities.splice(y, 1);
@@ -433,11 +387,9 @@ Food.prototype.update = function (cells, clickClock, gameClock, entitiesMapping)
 }
 
 
-function CellBot(canvas, ctx, x, y) {
-    Cell.call(this, canvas, ctx);
+function CellBot(game, x, y) {
+    Cell.call(this, game, x, y);
     this.type = "cellBot";
-    this.x = x;
-    this.y = y;
     this.mass = random(25, 25);
     this.gravity = this.mass + this.mass / 2;
     this.color = randomRGB();
@@ -451,78 +403,15 @@ function CellBot(canvas, ctx, x, y) {
 CellBot.prototype.draw = Cell.prototype.draw;
 CellBot.prototype.die = Cell.prototype.die;
 CellBot.prototype.isDead = Cell.prototype.isDead;
-CellBot.prototype.update = function (cell, clickClock, gameClock, entitiesMapping) {
+CellBot.prototype.update = function (cell, clickClock, gameClock, worldSections) {
+    this.underOtherCellGravity = false;
     this.draw(gameClock);
     let movementChange = random(0, this.cellActivityRangeMax);
     if (movementChange === 0) {
         this.changeDirection(random(0, this.canvas.width - 1), random(0, this.canvas.height - 1));
     }
 
-    this._update(entitiesMapping);
-
-    // Check if Cell is eating this CellBot or the opposite
-
-    // if (cell.gravity > this.gravity) {
-    //     let [distance, diffX, diffY] = calculateDistance(cell, this);
-    //     if (checkEntityProximity(diffX, diffY, cell.gravity)) {
-    //         let isEaten = cell.eat(this, diffX, diffY);
-    //         if (isEaten) return false;
-    //
-    //         let [gravityPullX, gravityPullY] = calculateGravityPull(
-    //             [distance, diffX, diffY],
-    //             this,
-    //             cell
-    //         );
-    //
-    //         cell.velocityX += gravityPullX;
-    //         cell.velocityY += gravityPullY;
-    //     }
-    // } else if (cell.gravity < this.gravity) {
-    //     let [distance, diffX, diffY] = calculateDistance(this, cell);
-    //     if (checkEntityProximity(diffX, diffY, this.gravity)) {
-    //         let isEaten = this.eat(cell, diffX, diffY);
-    //         if (isEaten) {
-    //             cell.die();
-    //         } else {
-    //             let [gravityPullX, gravityPullY] = calculateGravityPull(
-    //                 [distance, diffX, diffY],
-    //                 cell,
-    //                 this
-    //             );
-    //
-    //             cell.velocityX += gravityPullX;
-    //             cell.velocityY += gravityPullY;
-    //         }
-    //
-    //
-    //     }
-    // }
-
-    // let cellPosY = Math.floor(this.y / 64);
-    // let cellPosX = Math.floor(this.x / 64);
-    // if (cellPosY in entitiesMapping && cellPosX in entitiesMapping[cellPosY]) {
-    //     let entities = entitiesMapping[cellPosY][cellPosX];
-    //     let index = entities.indexOf(this);
-    //     if (index !== -1) {
-    //         entities.splice(index, 1);
-    //     }
-    // }
-    //
-    // this.collisionDetect();
-    // this.x += this.velocityX;
-    // this.y += this.velocityY;
-    //
-    // cellPosY = Math.floor(this.y / 64);
-    // cellPosX = Math.floor(this.x / 64);
-    // if (!(cellPosY in entitiesMapping)) {
-    //     entitiesMapping[cellPosY] = {};
-    // }
-    // if (cellPosX in entitiesMapping[cellPosY]) {
-    //     entitiesMapping[cellPosY][cellPosX].push(this);
-    // } else {
-    //     entitiesMapping[cellPosY][cellPosX] = [this];
-    // }
-
+    this._update(worldSections);
     return !this.isDead();
 }
 
