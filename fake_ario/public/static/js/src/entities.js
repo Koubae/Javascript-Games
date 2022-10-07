@@ -247,7 +247,7 @@ Cell.prototype._update = function() {
                 if (this.gravity > entity.gravity) { // current Cell can pull / eat near-by cells
                     const stillAlive = this.gravityPull(this, entity);
                     if (!stillAlive) continue;
-                } else if (this.gravity < entity.gravity) { // near-by cell can pull / eat this cells
+                } else if (this.type === "cell" && this.gravity < entity.gravity) { // near-by cell can pull / eat this cells
                     const stillAlive = this.gravityPull(entity, this);
                     if (!stillAlive) break;
                 }
@@ -347,7 +347,12 @@ Cell.prototype.eat = function (entity, diffX, diffY) {
         return false;
     }
 
-    let massAcquired = entity.mass / 30;
+    let massAcquired;
+    if (entity.type === "cellBot" || entity.type === "cell") {
+        massAcquired = entity.mass / 10;
+    } else {
+        massAcquired = entity.mass / 30
+    }
     // the gravity must increase at least the same as the mass, otherwise the gravity force will reduce!!!
     // why? Well, the gravity is nothing more that the 'distance from the center of the Cell to outside of is radius
     // until where it can start to attract other masses. So if is growing, its radius is growing too and hence
@@ -367,6 +372,8 @@ Cell.prototype.eat = function (entity, diffX, diffY) {
     // Now if the cell eat, we send a signal to the game to generate a new food (if is food)
     if (entity.type === "food") {
         this.game.makeFood();
+    } else if (entity.type === 'cellBot') {
+        this.game.makeBot();
     }
 
     return true;
@@ -418,12 +425,20 @@ Food.prototype.animation = undefined;
 function CellBot(game, x, y, animationType = 'bacteriaOne') {
     Cell.call(this, game, x, y);
     this.type = "cellBot";
-    this.mass = random(25, 25);
+    this.mass = random(25, 75);
     this.gravity = this.mass + this.mass / 2;
     this.color = randomRGB();
     this.MAX_SPEED = 8;
 
-    this.animationType = animationType;
+    const ANIMATIONS = [
+        'almostExploding',
+        'doubleCellOne',
+        'doubleCellTwo',
+        'doubleCellThree',
+        'doubleCellFour',
+        'bacteriaOne',
+    ];
+    this.animationType = ANIMATIONS[random(0, ANIMATIONS.length-1)];
     if (this.animationType === 'almostExploding') {
         this.animation = animationAlmostExploding;
     } else if (this.animationType === 'doubleCellOne') {

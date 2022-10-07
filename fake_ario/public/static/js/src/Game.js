@@ -7,7 +7,7 @@ import {Cell, CellBot, Food} from "./entities.js";
 import {random} from "./utils.js";
 
 function Game(canvas) {
-    const DEBUG = true;
+    const DEBUG = false;
     const BACKGROUND_COLOR = `rgba(0, 0, 0)`;
     const BACKGROUND_TYPES = ["svg", "css"];
     const BACKGROUND_TYPE = BACKGROUND_TYPES[0];
@@ -18,6 +18,7 @@ function Game(canvas) {
     const FONT_COLOR = `rgb(255, 255, 255)`;
 
     const FOOD_COUNT = 350;
+    const BOTS_COUNT = 15;
 
     this.canvas = canvas;
     this.ctx = undefined;
@@ -142,16 +143,10 @@ function Game(canvas) {
         this.makeFood();
     }
 
-    for (let i = 0; i < 1; i++) {
-        let cellBoot = new CellBot(
-            this,
-            700,
-            500,
-        );
-        this.addEntityWorldChunk(cellBoot);
+    for (let i = 0; i < BOTS_COUNT; i++) {
+        this.makeBot();
     }
 
-    // this.cells = [this.cell, ...this.cellBots, ...this.foods];
 
     // TODO: zoom-in / zoom-out currently is not working and is a mess!
 
@@ -203,17 +198,7 @@ function Game(canvas) {
         }
 
         // TODO: use a worker(s) to update the food.(or anything really!!!)
-        for (const [_, data] of Object.entries(this.worldSections)) {
-            for (const [__, col] of Object.entries(data)) {
-                // todo: we iterate only once, but cell types (cell, food, cellBot) are not ordered)
-                // so depending on how the cell are drown, may be one on top of another.
-                col.forEach(c => {
-                    if (!c.isDead()) {
-                        c.update();
-                    }
-                });
-            }
-        }
+        this.renderEntities();
 
 
         // WORLD
@@ -262,7 +247,7 @@ Game.prototype.updatePointerPosition = function (e) {
     this.clickClock = this.GAME_CLOCK;
 }
 
-Game.prototype.cameraUpdate = function() {
+Game.prototype.cameraUpdate = function () {
     let w = window.innerWidth;
     let h = window.innerHeight;
     window.scroll(
@@ -272,9 +257,9 @@ Game.prototype.cameraUpdate = function() {
 
 }
 
-Game.prototype.makeFood = function() {
+Game.prototype.makeFood = function () {
     const margin = 25;  // add / remove 25 as margin so that is not sticked to the walls
-    let food =  new Food(
+    let food = new Food(
         this,
         random(margin, this.canvas.width - margin),
         random(margin, this.canvas.height - margin)
@@ -284,21 +269,70 @@ Game.prototype.makeFood = function() {
     return food
 }
 
+Game.prototype.makeBot = function () {
+    const margin = 25;  // add / remove 25 as margin so that is not sticked to the walls
+    let cellBoot = new CellBot(
+        this,
+        random(margin, this.canvas.width - margin),
+        random(margin, this.canvas.height - margin),
+    );
+    this.addEntityWorldChunk(cellBoot);
+    return cellBoot;
+}
+
 /**
  * // TODO: use a worker(s) to update the food.
  */
-Game.prototype.renderFoods = function() {
-    this.foods = this.foods.map(f => {
-        let isAlive = f.update([this.cell, ...this.cellBots], this.clickClock, this.GAME_CLOCK);
-        if (isAlive) return f;
-        return this.makeFood(); // is dead then we create a new food
+Game.prototype.renderEntities = function () {
+
+    // Collecting all existing entities before-hand
+    // we cannot update them on the fly, because while update them the entity will update
+    // it position, as well as the position of the eating / gravity-pulled entity in the map matrix.
+    // so when updated, we may skipp entities that changed 'map index
+    let food = [];
+    let cellBot = [];
+    let cells = [];
+    for (const [coordY, data] of Object.entries(this.worldSections)) {
+        for (const [coordX, col] of Object.entries(data)) {
+            col.forEach(cell => {
+                if (cell.type === "cell") {
+                    cells.push(cell);
+                } else if (cell.type === "cellBot") {
+                    cellBot.push(cell);
+                } else if (cell.type === "food") {
+                    food.push(cell);
+                } else {
+                    console.error(`Cell coord Y=${coordY},X=${coordX} with type=${cell.type} has not supported type!`)
+                }
+            });
+        }
+
+    }
+    // Now iterate through each entity type. Order Matters!!!
+    // because what paints after is paint on top of what is previously painted
+    food.forEach(cell => {
+        if (!cell.isDead()) {
+            cell.update();
+        }
     });
+    cells.forEach(cell => {
+        if (!cell.isDead()) {
+            cell.update();
+        }
+    });
+    cellBot.forEach(cell => {
+        if (!cell.isDead()) {
+            cell.update();
+        }
+    });
+
+
 }
 
 
 // Utils methods
 
-Game.prototype.addEntityWorldChunk = function(entity) {
+Game.prototype.addEntityWorldChunk = function (entity) {
     const [cellPosX, cellPosY] = this.calculateGameChunk(entity.x, entity.y);
     if (!(cellPosY in this.worldSections)) {
         this.worldSections[cellPosY] = {};
@@ -311,7 +345,7 @@ Game.prototype.addEntityWorldChunk = function(entity) {
     }
 }
 
-Game.prototype.removeEntityWorldChunk = function(entity) {
+Game.prototype.removeEntityWorldChunk = function (entity) {
     const [cellPosX, cellPosY] = this.calculateGameChunk(entity.x, entity.y);
     // Now, we delete the reference for garbage collection
     if (cellPosY in this.worldSections && cellPosX in this.worldSections[cellPosY]) {
@@ -345,7 +379,7 @@ Game.prototype.removeEntityWorldChunk = function(entity) {
  * @param y
  * @returns {[number,number]} X index and Y index of the Game Mapping section
  */
-Game.prototype.calculateGameChunk = function(x, y) {
+Game.prototype.calculateGameChunk = function (x, y) {
     return [
         Math.floor(Math.max(0, x / this.constants.CHUNK_SIZE)),
         Math.floor(Math.max(0, y / this.constants.CHUNK_SIZE))
