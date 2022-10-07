@@ -137,8 +137,6 @@ function Game(canvas) {
     this.cell = new Cell(this, playerXPos, playerYPos);
     this.addEntityWorldChunk(this.cell);
 
-
-
     // the render logic should be focus ing on the rendering
     for (let i = 0; i < FOOD_COUNT; i++) {
         this.makeFood();

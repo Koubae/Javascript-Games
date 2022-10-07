@@ -82,6 +82,7 @@ function Cell(game, x, y) {
     this.game = game;
     this.ctx = game.ctx;
     this.canvas = game.canvas;
+    this.color = `rgb(255, 0, 0)`
     this.x = x;
     this.y = y;
     this.mass = 50;
@@ -94,10 +95,25 @@ function Cell(game, x, y) {
     this._dead = false;
 
     // Animations
-    this.animation = undefined;
     this.animationTime = 25.5;
+    this.animationType ='doubleCellOne';
+    if (this.animationType === 'almostExploding') {
+        this.animation = animationAlmostExploding;
+    } else if (this.animationType === 'doubleCellOne') {
+        this.animation = animationDoubleCellOne;
+    } else if (this.animationType === 'doubleCellTwo') {
+        this.animation = animationDoubleCellTwo;
+    } else if (this.animationType === 'doubleCellThree') {
+        this.animation = animationDoubleCellThree;
+    } else if (this.animationType === 'doubleCellFour') {
+        this.animation = animationDoubleCellFour;
+    } else if (this.animationType === 'bacteriaOne') {
+        this.animation = animationBacteriaOne;
+    } else {
+        this.animation = undefined;
+    }
 
-    this.color = `rgb(255, 0, 0)`
+
 
 
 }
@@ -119,11 +135,11 @@ Cell.prototype.die = function () {
 
 }
 
-Cell.prototype.draw = function (gameClock) {
-    if (gameClock === null || this.animation === undefined) {
+Cell.prototype.draw = function () {
+    if (this.animation === undefined) {
         circle(this.ctx, this.x, this.y, this.mass, this.color);
     } else {
-        this.animation(gameClock);
+        this.animation(this.game.GAME_CLOCK);
     }
 
     if (this.game.constants.DEBUG) {
@@ -158,21 +174,6 @@ Cell.prototype.update = function () {
     this._update();
 
 
-}
-
-Cell.prototype.changeDirection = function (directionX, directionY) {
-    // Grap the difference of the click with the player position
-    let diff_x = directionX - this.x;
-    let diff_y = directionY - this.y;
-    // Calculate the distance
-    let distance = Math.max(0, Math.sqrt(diff_x * diff_x + diff_y * diff_y) + this.mass * 4);
-
-    let speed = distance * this.ATTRACTION; // add attraction
-    if (speed > this.MAX_SPEED) speed = this.MAX_SPEED;
-    if (speed < this.MIN_SPEED) speed = this.MIN_SPEED;
-
-    this.velocityX = (diff_x / distance) * speed;
-    this.velocityY = (diff_y / distance) * speed;
 }
 
 Cell.prototype._update = function() {
@@ -268,6 +269,21 @@ Cell.prototype._update = function() {
 
 }
 
+Cell.prototype.changeDirection = function (directionX, directionY) {
+    // Grap the difference of the click with the player position
+    let diff_x = directionX - this.x;
+    let diff_y = directionY - this.y;
+    // Calculate the distance
+    let distance = Math.max(0, Math.sqrt(diff_x * diff_x + diff_y * diff_y) + this.mass * 4);
+
+    let speed = distance * this.ATTRACTION; // add attraction
+    if (speed > this.MAX_SPEED) speed = this.MAX_SPEED;
+    if (speed < this.MIN_SPEED) speed = this.MIN_SPEED;
+
+    this.velocityX = (diff_x / distance) * speed;
+    this.velocityY = (diff_y / distance) * speed;
+}
+
 /// Entity Actions
 Cell.prototype.eat = function (entity, diffX, diffY) {
     // First Check the position. Is this entity close enough to eat THAT entity?
@@ -318,24 +334,13 @@ if (Cell.collisionWallType === 'bounce') {
     }
 }
 
-Cell.animationType = 'doubleCellOne';
-if (Cell.animationType === 'almostExploding') {
-    Cell.prototype.animation = animationAlmostExploding;
-} else if (Cell.animationType === 'doubleCellOne') {
-    Cell.prototype.animation = animationDoubleCellOne;
-} else if (Cell.animationType === 'doubleCellTwo') {
-    Cell.prototype.animation = animationDoubleCellTwo;
-} else if (Cell.animationType === 'doubleCellThree') {
-    Cell.prototype.animation = animationDoubleCellThree;
-} else if (Cell.animationType === 'doubleCellFour') {
-    Cell.prototype.animation = animationDoubleCellFour;
-} else if (Cell.animationType === 'bacteriaOne') {
-    Cell.prototype.animation = animationBacteriaOne;
-}
+
 
 
 function Food(game, x, y) {
     Cell.call(this, game, x, y);
+    this.animation = undefined;
+    this.animationType = undefined;
     this.type = "food";
     this.mass = 50 / 4;
     this.gravity = this.mass + this.mass / 2;
@@ -352,10 +357,10 @@ Food.prototype.update = function () {
         this.lastMovementTimeStamp = this.game.clickClock;
     }
 
-    this.draw(null);
+    this.draw();
     return !this.isDead();
 }
-
+Food.prototype.animation = undefined;
 
 function CellBot(game, x, y) {
     Cell.call(this, game, x, y);
@@ -364,6 +369,23 @@ function CellBot(game, x, y) {
     this.gravity = this.mass + this.mass / 2;
     this.color = randomRGB();
     this.MAX_SPEED = 8;
+
+    this.animationType ='bacteriaOne';
+    if (this.animationType === 'almostExploding') {
+        this.animation = animationAlmostExploding;
+    } else if (this.animationType === 'doubleCellOne') {
+        this.animation = animationDoubleCellOne;
+    } else if (this.animationType === 'doubleCellTwo') {
+        this.animation = animationDoubleCellTwo;
+    } else if (this.animationType === 'doubleCellThree') {
+        this.animation = animationDoubleCellThree;
+    } else if (this.animationType === 'doubleCellFour') {
+        this.animation = animationDoubleCellFour;
+    } else if (this.animationType === 'bacteriaOne') {
+        this.animation = animationBacteriaOne;
+    } else {
+        this.animation = undefined;
+    }
 
     // CellBot Specific
     this.cellActivityRangeMax = random(10, 60); // lower number: very active, highest number less active
@@ -375,7 +397,7 @@ CellBot.prototype.die = Cell.prototype.die;
 CellBot.prototype.isDead = Cell.prototype.isDead;
 CellBot.prototype.update = function () {
     this.underOtherCellGravity = false;
-    this.draw(this.game.GAME_CLOCK);
+    this.draw();
     let movementChange = random(0, this.cellActivityRangeMax);
     if (movementChange === 0) {
         this.changeDirection(random(0, this.canvas.width - 1), random(0, this.canvas.height - 1));
@@ -390,8 +412,17 @@ CellBot.prototype.eat = Cell.prototype.eat;
 CellBot.prototype.changeDirection = Cell.prototype.changeDirection;
 
 /// Entity physics
-Cell.collisionWallType = 'bacteriaOne';
-CellBot.prototype.collisionDetect = CollisionWallStopMotion;
+
+CellBot.collisionWallType = 'stopMotion';
+if (CellBot.collisionWallType === 'bounce') {
+    CellBot.prototype.collisionDetect = CollisionWallBounce;
+} else if (CellBot.collisionWallType === "stopMotion") {
+    CellBot.prototype.collisionDetect = CollisionWallStopMotion;
+} else {
+    CellBot.prototype.collisionDetect = () => {
+    }
+}
+
 
 export {
     Cell,
