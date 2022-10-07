@@ -13,6 +13,8 @@ import {
     animationBacteriaOne
 } from "./animations/entityAnimations.js";
 
+const DEBUG = true;
+
 // TODO: Create Vector Object
 /**
  * Calculates distance and distance difference between 2 entities
@@ -70,7 +72,8 @@ function calculateGravityPull(spaces, entityA, entityB) {
 }
 
 
-function Cell(canvas, ctx) {
+function Cell(canvas, ctx, x, y) {
+    this.type = "cell";
     // Movement
     this.MAX_SPEED = 15;
     this.MIN_SPEED = 0.15;
@@ -79,8 +82,8 @@ function Cell(canvas, ctx) {
 
     this.ctx = ctx;
     this.canvas = canvas;
-    this.x = 250;
-    this.y = 250;
+    this.x = x;
+    this.y = y;
     this.mass = 50;
     this.gravity = this.mass + this.mass / 2;
     this.velocityX = this.BASE_SPEED;
@@ -102,14 +105,28 @@ Cell.prototype.isDead = function () {
     return this._dead;
 }
 
-Cell.prototype.die = function () {
+Cell.prototype.die = function (entitiesMapping) {
+    // Hold previous x,y coordinates
+    let cellPosY = Math.floor(this.y / 64);
+    let cellPosX = Math.floor(this.x / 64);
     this._dead = true;
-    this.x = -1000;
+    this.x = -1000; // update x,y coordinates so that go outside of the canvas view
     this.y = -1000;
     this.velocityX = 0;
     this.velocityY = 0;
     this.mass = 0;
-    circle(this.ctx, this.x, this.y, this.mass, this.color);
+    circle(this.ctx, this.x, this.y, this.mass, this.color); // Make sure is drawn away
+
+    // Now, we delete the reference for garbage collection
+    if (cellPosY in entitiesMapping && cellPosX in entitiesMapping[cellPosY]) {
+        let entities = entitiesMapping[cellPosY][cellPosX];
+        let index = entities.indexOf(this);
+        if (index !== -1) {
+            // delete entities[index];
+            entities.splice(index, 1);
+        }
+    }
+
 }
 
 Cell.prototype.draw = function (gameClock) {
@@ -119,10 +136,21 @@ Cell.prototype.draw = function (gameClock) {
         this.animation(gameClock);
     }
 
+    if (DEBUG) {
+        this.ctx.font = '10px serif';
+        this.ctx.fillStyle = "#000";
+        this.ctx.fillText(
+            `${Math.floor((Math.max(0, this.x / 64)))} ${Math.floor((Math.max(0, this.y / 64)))}`,
+            this.x,
+            this.y
+        );
+    }
+
 }
 
-Cell.prototype.update = function (clickX, clickY, clickClock, gameClock) {
+Cell.prototype.update = function (clickX, clickY, clickClock, gameClock, entitiesMapping) {
     this.draw(gameClock);
+
     clickX = clickX ? clickX : 0;
     clickY = clickY ? clickY : 0;
 
@@ -136,9 +164,7 @@ Cell.prototype.update = function (clickX, clickY, clickClock, gameClock) {
         this.changeDirection(clickX, clickY);
     }
 
-    this.collisionDetect();
-    this.x += this.velocityX;
-    this.y += this.velocityY;
+    this._update(entitiesMapping);
 
 
 }
@@ -158,10 +184,145 @@ Cell.prototype.changeDirection = function (directionX, directionY) {
     this.velocityY = (diff_y / distance) * speed;
 }
 
+Cell.prototype._update = function(entitiesMapping) {
+    if (this.isDead()) return false;
+
+    let leftTop = [(this.x - this.mass)+-this.gravity/2, (this.y - this.mass)+-this.gravity/2];
+    let rightTop = [(this.x + this.mass)+this.gravity/2, (this.y - this.mass)+-this.gravity/2];
+
+    let leftBottom = [(this.x - this.mass)+-this.gravity/2, (this.y + this.mass)+this.gravity/2];
+    let rightBottom = [(this.x + this.mass)+this.gravity/2, (this.y + this.mass)+this.gravity/2];
+
+    let left = [Math.floor((Math.max(0, leftTop[0] )) / 64), Math.floor((Math.max(0, rightTop[0] )) / 64)];
+    let top = [Math.floor((Math.max(0, leftTop[1] )) / 64), Math.floor((Math.max(0, rightBottom[1] )) / 64)];
+
+    if (DEBUG) {
+        circle(this.ctx, leftTop[0], leftTop[1], 2, "rgb(0, 0, 255)");
+        circle(this.ctx, rightTop[0], rightTop[1], 2, "rgb(0, 0, 255)");
+        circle(this.ctx, leftBottom[0], leftBottom[1], 2, "rgb(0, 0, 255)");
+        circle(this.ctx, rightBottom[0], rightBottom[1], 2, "rgb(0, 0, 255)");
+    }
+
+
+    for (let a = top[0]; a < top[1]+1; a++) {
+        if (!(a in entitiesMapping)) continue;
+        let cols = entitiesMapping[a];
+        for (let i = left[0]; i < left[1]+1; i++) {
+            if (!(i in cols)) continue;
+            let entities = cols[i];
+            let entStay = [];
+            for (let y = 0; y < entities.length; y ++) {
+                let entity = entities[y];
+                if (entity === this) {
+                    entStay.push(entity);
+                    continue;
+                }
+                if (DEBUG) entity.color = "rgb(255, 0, 0)";
+
+                if (this.gravity > entity.gravity) {
+                    let [distance, diffX, diffY] = calculateDistance(this, entity);
+                    if (checkEntityProximity(diffX, diffY, this.gravity)) {
+                        let isEaten = this.eat(entity, diffX, diffY);
+                        if (isEaten) {
+                            entity.die(entitiesMapping);
+                            continue;
+                        }
+
+                        let [gravityPullX, gravityPullY] = calculateGravityPull(
+                            [distance, diffX, diffY],
+                            entity,
+                            this
+                        );
+
+                        entity.x += gravityPullX;
+                        entity.y += gravityPullY;
+                        let posY = Math.floor((entity.y) / 64);
+                        let posX = Math.floor((entity.x) / 64);
+                        if (posY === a && posX === i) {
+                            entStay.push(entity);
+                            continue;
+                        }
+
+                        if (!(posY in entitiesMapping)) {
+                            entitiesMapping[posY] = {};
+                        }
+                        if (posX in entitiesMapping[posY]) {
+                            entitiesMapping[posY][posX].push(entity);
+                        } else {
+                            entitiesMapping[posY][posX] = [entity];
+                        }
+
+
+                    } else {
+                        entStay.push(entity);
+                    }
+                } else if (this.gravity < entity.gravity) {
+                    entStay.push(entity);
+                    let [distance, diffX, diffY] = calculateDistance(entity, this);
+                    if (checkEntityProximity(diffX, diffY, entity.gravity)) {
+                        let isEaten = entity.eat(this, diffX, diffY);
+                        if (isEaten) {
+                            this.die(entitiesMapping);
+                            return false;
+                        }
+
+                        let [gravityPullX, gravityPullY] = calculateGravityPull(
+                            [distance, diffX, diffY],
+                            this,
+                            entity
+                        );
+                        this.x += gravityPullX;
+                        this.y += gravityPullY;
+                    }
+                }
+
+            }
+            if (entStay.length) {
+                cols[i] = entStay;
+            } else {
+                delete cols[i];
+            }
+
+
+        }
+
+
+    }
+
+
+    let cellPosY = Math.floor(this.y / 64);
+    let cellPosX = Math.floor(this.x / 64);
+    if (cellPosY in entitiesMapping && cellPosX in entitiesMapping[cellPosY]) {
+        let entities = entitiesMapping[cellPosY][cellPosX];
+        let index = entities.indexOf(this);
+        if (index !== -1) {
+            entities.splice(index, 1);
+        }
+        if (entities.length <= 0) {
+            delete entitiesMapping[cellPosY][cellPosX];
+        }
+    }
+
+    this.collisionDetect();
+    this.x += this.velocityX;
+    this.y += this.velocityY;
+
+    cellPosY = Math.floor(this.y / 64);
+    cellPosX = Math.floor(this.x / 64);
+    if (!(cellPosY in entitiesMapping)) {
+        entitiesMapping[cellPosY] = {};
+    }
+    if (cellPosX in entitiesMapping[cellPosY]) {
+        entitiesMapping[cellPosY][cellPosX].push(this);
+    } else {
+        entitiesMapping[cellPosY][cellPosX] = [this];
+    }
+}
+
 /// Entity Actions
 Cell.prototype.eat = function (entity, diffX, diffY) {
     // First Check the position. Is this entity close enough to eat THAT entity?
-    if (Math.abs(diffX) > this.mass - 10 || Math.abs(diffY) > this.mass - 10) {
+    if (Math.abs(diffX) > this.mass - (this.mass / 3) || Math.abs(diffY) > this.mass - (this.mass / 3)) {
         return false;
     }
     // Next Check. is THIS entity big enough to eat THAT entity?
@@ -219,7 +380,8 @@ if (Cell.animationType === 'almostExploding') {
 
 
 function Food(canvas, ctx, x, y) {
-    Cell.call(this, canvas, ctx)
+    Cell.call(this, canvas, ctx);
+    this.type = "food";
     this.x = x;
     this.y = y;
     this.mass = 50 / 4;
@@ -229,7 +391,10 @@ function Food(canvas, ctx, x, y) {
 }
 
 Food.prototype.draw = Cell.prototype.draw;
-Food.prototype.update = function (cell, clickClock, gameClock) {
+Food.prototype.die = Cell.prototype.die;
+Food.prototype.isDead = Cell.prototype.isDead;
+Food.prototype.update = function (cells, clickClock, gameClock, entitiesMapping) {
+
     if (this.lastMovementTimeStamp !== clickClock) {
         this.lastMovementTimeStamp = clickClock;
     }
@@ -237,31 +402,43 @@ Food.prototype.update = function (cell, clickClock, gameClock) {
     // 1) calculate x,y difference between object and target. target is the Minuend and object the Subtrahend
     // 2) Get the distance. Square Root of diffX **2 + diffY **2
     // 3) Check that diffX is less than gravity
+    // for (let i = 0; i < cells.length; i++) { // NOTE: The first cell is always the 'Player' cell
+    //     let cell = cells[i];
+    //     let [distance, diffX, diffY] = calculateDistance(cell, this);
+    //     if (checkEntityProximity(diffX, diffY, cell.gravity)) {
+    //         let isEaten = cell.eat(this, diffX, diffY);
+    //         if (isEaten) return false;
+    //
+    //         let [gravityPullX, gravityPullY] = calculateGravityPull(
+    //             [distance, diffX, diffY],
+    //             this,
+    //             cell
+    //         );
+    //
+    //         this.x += gravityPullX;
+    //         this.y += gravityPullY;
+    //     }
+    // }
+    // let currentPosition = Math.floor((this.x+this.y) / 64);
+    // if (currentPosition in entitiesMapping) {
+    //     let entity = entitiesMapping[currentPosition];
+    //     let index = entity.indexOf(this);
+    //     if (index !== -1) {
+    //         entities.splice(y, 1);
+    //     }
+    // }
 
-    let [distance, diffX, diffY] = calculateDistance(cell, this);
-    if (checkEntityProximity(diffX, diffY, cell.gravity)) {
-        let isEaten = cell.eat(this, diffX, diffY);
-        if (isEaten) return false;
-
-        let [gravityPullX, gravityPullY] = calculateGravityPull(
-            [distance, diffX, diffY],
-            this,
-            cell
-        );
-
-        this.x += gravityPullX;
-        this.y += gravityPullY;
-    }
     this.draw(null);
-    return true;
+    return !this.isDead();
 }
 
 
 function CellBot(canvas, ctx, x, y) {
-    Cell.call(this, canvas, ctx)
+    Cell.call(this, canvas, ctx);
+    this.type = "cellBot";
     this.x = x;
     this.y = y;
-    this.mass = random(25, 75);
+    this.mass = random(25, 25);
     this.gravity = this.mass + this.mass / 2;
     this.color = randomRGB();
     this.MAX_SPEED = 8;
@@ -272,57 +449,84 @@ function CellBot(canvas, ctx, x, y) {
 }
 
 CellBot.prototype.draw = Cell.prototype.draw;
-CellBot.prototype.update = function (cell, clickClock, gameClock) {
+CellBot.prototype.die = Cell.prototype.die;
+CellBot.prototype.isDead = Cell.prototype.isDead;
+CellBot.prototype.update = function (cell, clickClock, gameClock, entitiesMapping) {
     this.draw(gameClock);
     let movementChange = random(0, this.cellActivityRangeMax);
     if (movementChange === 0) {
         this.changeDirection(random(0, this.canvas.width - 1), random(0, this.canvas.height - 1));
     }
 
+    this._update(entitiesMapping);
+
     // Check if Cell is eating this CellBot or the opposite
 
-    if (cell.gravity > this.gravity) {
-        let [distance, diffX, diffY] = calculateDistance(cell, this);
-        if (checkEntityProximity(diffX, diffY, cell.gravity)) {
-            let isEaten = cell.eat(this, diffX, diffY);
-            if (isEaten) return false;
+    // if (cell.gravity > this.gravity) {
+    //     let [distance, diffX, diffY] = calculateDistance(cell, this);
+    //     if (checkEntityProximity(diffX, diffY, cell.gravity)) {
+    //         let isEaten = cell.eat(this, diffX, diffY);
+    //         if (isEaten) return false;
+    //
+    //         let [gravityPullX, gravityPullY] = calculateGravityPull(
+    //             [distance, diffX, diffY],
+    //             this,
+    //             cell
+    //         );
+    //
+    //         cell.velocityX += gravityPullX;
+    //         cell.velocityY += gravityPullY;
+    //     }
+    // } else if (cell.gravity < this.gravity) {
+    //     let [distance, diffX, diffY] = calculateDistance(this, cell);
+    //     if (checkEntityProximity(diffX, diffY, this.gravity)) {
+    //         let isEaten = this.eat(cell, diffX, diffY);
+    //         if (isEaten) {
+    //             cell.die();
+    //         } else {
+    //             let [gravityPullX, gravityPullY] = calculateGravityPull(
+    //                 [distance, diffX, diffY],
+    //                 cell,
+    //                 this
+    //             );
+    //
+    //             cell.velocityX += gravityPullX;
+    //             cell.velocityY += gravityPullY;
+    //         }
+    //
+    //
+    //     }
+    // }
 
-            let [gravityPullX, gravityPullY] = calculateGravityPull(
-                [distance, diffX, diffY],
-                this,
-                cell
-            );
+    // let cellPosY = Math.floor(this.y / 64);
+    // let cellPosX = Math.floor(this.x / 64);
+    // if (cellPosY in entitiesMapping && cellPosX in entitiesMapping[cellPosY]) {
+    //     let entities = entitiesMapping[cellPosY][cellPosX];
+    //     let index = entities.indexOf(this);
+    //     if (index !== -1) {
+    //         entities.splice(index, 1);
+    //     }
+    // }
+    //
+    // this.collisionDetect();
+    // this.x += this.velocityX;
+    // this.y += this.velocityY;
+    //
+    // cellPosY = Math.floor(this.y / 64);
+    // cellPosX = Math.floor(this.x / 64);
+    // if (!(cellPosY in entitiesMapping)) {
+    //     entitiesMapping[cellPosY] = {};
+    // }
+    // if (cellPosX in entitiesMapping[cellPosY]) {
+    //     entitiesMapping[cellPosY][cellPosX].push(this);
+    // } else {
+    //     entitiesMapping[cellPosY][cellPosX] = [this];
+    // }
 
-            cell.velocityX += gravityPullX;
-            cell.velocityY += gravityPullY;
-        }
-    } else if (cell.gravity < this.gravity) {
-        let [distance, diffX, diffY] = calculateDistance(this, cell);
-        if (checkEntityProximity(diffX, diffY, this.gravity)) {
-            let isEaten = this.eat(cell, diffX, diffY);
-            if (isEaten) {
-                cell.die();
-            } else {
-                let [gravityPullX, gravityPullY] = calculateGravityPull(
-                    [distance, diffX, diffY],
-                    cell,
-                    this
-                );
-
-                cell.velocityX += gravityPullX;
-                cell.velocityY += gravityPullY;
-            }
-
-
-        }
-    }
-
-    this.collisionDetect();
-    this.x += this.velocityX;
-    this.y += this.velocityY;
-    return true;
+    return !this.isDead();
 }
 
+CellBot.prototype._update = Cell.prototype._update;
 CellBot.prototype.eat = Cell.prototype.eat;
 CellBot.prototype.changeDirection = Cell.prototype.changeDirection;
 

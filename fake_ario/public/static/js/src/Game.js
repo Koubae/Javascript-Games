@@ -7,9 +7,11 @@ import {Cell, CellBot, Food} from "./entities.js";
 import {random} from "./utils.js";
 
 function Game(canvas) {
+    const DEBUG = true;
     const BACKGROUND_COLOR = `rgba(0, 0, 0)`;
     const BACKGROUND_TYPES = ["svg", "css"];
     const BACKGROUND_TYPE = BACKGROUND_TYPES[0];
+    const CHUNK_SIZE = 64;
 
     const FONT_SIZE = "55px";
     const FONT_FAMILY = "serif";
@@ -43,9 +45,12 @@ function Game(canvas) {
 
 
     this.constants = Object.freeze({
+        DEBUG: DEBUG,
         BACKGROUND_COLOR: BACKGROUND_COLOR,
         BACKGROUND_TYPES: BACKGROUND_TYPES,
         BACKGROUND_TYPE: BACKGROUND_TYPE,
+
+        CHUNK_SIZE: CHUNK_SIZE,
 
         FONT_SIZE: FONT_SIZE,
         FONT_FAMILY: FONT_FAMILY,
@@ -123,9 +128,31 @@ function Game(canvas) {
     // --------------------------
     // Game Logic
     // --------------------------
+    this.worldSections = {};
+    // let chunkNumber = 1;
+    // for (let y = CHUNK_SIZE; y < this.canvas.height + CHUNK_SIZE; y += CHUNK_SIZE) {
+    //     for (let i = CHUNK_SIZE; i < this.canvas.width + CHUNK_SIZE; i += CHUNK_SIZE) {
+    //         this.worldSections[chunkNumber] = []
+    //         chunkNumber += 1;
+    //     }
+    // }
+
 
     // Game Entities Declarations here
-    this.cell = new Cell(canvas, this.ctx);
+    this.cell = new Cell(canvas, this.ctx, 250, 250);
+    let cellPosY = Math.floor((250) / CHUNK_SIZE);
+    let cellPosX = Math.floor((250) / CHUNK_SIZE);
+    if (!(cellPosY in this.worldSections)) {
+        this.worldSections[cellPosY] = {};
+    }
+
+    if (cellPosX in this.worldSections[cellPosY]) {
+        this.worldSections[cellPosY][cellPosX].push(this.cell);
+    } else {
+        this.worldSections[cellPosY][cellPosX] = [this.cell];
+    }
+
+
     // the render logic should be focus ing on the rendering
     this.foods = [];
     for (let i = 0; i < FOOD_COUNT; i++) {
@@ -134,16 +161,29 @@ function Game(canvas) {
     }
 
     this.cellBots = [];
-    this.cellBots.push(
-        new CellBot(
+    for (let i = 0; i < 1; i++) {
+        let cellBoot = new CellBot(
             this.canvas,
             this.ctx,
             700,
             500
-        )
-    );
+        );
+        let cellPosY = Math.floor((500) / this.constants.CHUNK_SIZE);
+        let cellPosX = Math.floor((700) / this.constants.CHUNK_SIZE);
+        if (!(cellPosY in this.worldSections)) {
+            this.worldSections[cellPosY] = {};
+        }
 
+        if (cellPosX in this.worldSections[cellPosY]) {
+            this.worldSections[cellPosY][cellPosX].push(cellBoot);
+        } else {
+            this.worldSections[cellPosY][cellPosX] = [cellBoot];
+        }
 
+        this.cellBots.push(cellBoot);
+    }
+
+    // this.cells = [this.cell, ...this.cellBots, ...this.foods];
 
     // TODO: zoom-in / zoom-out currently is not working and is a mess!
 
@@ -171,26 +211,79 @@ function Game(canvas) {
     //     // ctx.setTransform(1,0,0,1,0,0);
     // }
 
+    // let chunksX = Math.floor(this.canvas.width / CHUNK_SIZE);
+    // let chunksY = Math.floor(this.canvas.height / CHUNK_SIZE);
+    // console.log("chunksX ", chunksX, "chunksY ", chunksY);
+
 
     this.update = function () {
-
-        /// ENTITIES
-        this.renderFoods(); // TODO: use a worker(s) to update the food.
-
         let self = this;
-        this.cellBots = this.cellBots.reduce(function(result, bot) {
-            let alive = bot.update(self.cell, self.clickClock, self.GAME_CLOCK);
-            if (alive) {
-                result.push(bot);
-            }
-            return result;
-        }, []);
 
-        // Add Game Updates here
-        if (!this.cell.isDead()) {
-            this.cell.update(this.clickX, this.clickY, this.clickClock, this.GAME_CLOCK);
+
+        if (DEBUG) {
+            let entityGroups = Object.entries(this.worldSections);
+            try {
+                // makes all entities green for debugging purposes
+                entityGroups.forEach(
+                    group => Object.entries(group[1]).forEach(row => row[1].forEach(e => e.color = "rgb(0, 255, 0)")))
+                ;
+            } catch (e) {
+                console.error(`Error while making entities green (DEBUG) | Error ${e}`)
+            }
+
+        }
+        let players = [];
+        let bots = [];
+        let foods= [];
+        for (const [coordY, data] of Object.entries(this.worldSections)) {
+            for (const [coordX, col] of Object.entries(data)) {
+                col.forEach(c => {
+                    if (!c) {
+                        console.log("opps " + coordY + " " + coordX + " no data")
+                        return;
+
+                    }
+                    if (c.type === 'cell') {
+                        players.push(c);
+                    } else if (c.type === 'cellBot') {
+                        bots.push(c);
+                    } else if (c.type === 'food') {
+                        foods.push(c);
+                    } else {
+                        console.log("opps " + coordY + " " + coordX + " no cell type!!!")
+                        return;
+                    }
+
+
+                });
+            }
+
         }
 
+
+        // TODO: use a worker(s) to update the food.(or anything really!!!)
+
+
+        foods.forEach(cell => {
+            let isAlive = cell.update([self.cell, ...self.cellBots], self.clickClock, self.GAME_CLOCK, self.worldSections);
+            if (isAlive) return cell;
+            return self.makeFood(); // is dead then we create a new food
+        });
+
+        players.forEach(cell => {
+            // Add Game Updates here
+            if (!cell.isDead()) {
+                cell.update(self.clickX, self.clickY, self.clickClock, self.GAME_CLOCK, self.worldSections);
+            }
+        });
+        bots.forEach(cell => {
+            let alive = cell.update(self.cell, self.clickClock, self.GAME_CLOCK, self.worldSections);
+            if (!alive) {
+            }
+        });
+
+        let a = players[0];
+       if (a)  console.log(`player is dead ${a.isDead()}`)
 
 
         // WORLD
@@ -251,12 +344,29 @@ Game.prototype.cameraUpdate = function() {
 
 Game.prototype.makeFood = function() {
     const margin = 25;  // add / remove 25 as margin so that is not sticked to the walls
-    return new Food(
+    let foodX = random(margin, this.canvas.width - margin);
+    let foodY = random(margin, this.canvas.height - margin);
+    let food =  new Food(
         this.canvas,
         this.ctx,
-        random(margin, this.canvas.width - margin),
-        random(margin, this.canvas.height - margin)
+        foodX,
+        foodY
     );
+
+    let cellPosY = Math.floor((foodY) / this.constants.CHUNK_SIZE);
+    let cellPosX = Math.floor((foodX) / this.constants.CHUNK_SIZE);
+    if (!(cellPosY in this.worldSections)) {
+        this.worldSections[cellPosY] = {};
+    }
+
+    if (cellPosX in this.worldSections[cellPosY]) {
+        this.worldSections[cellPosY][cellPosX].push(food);
+    } else {
+        this.worldSections[cellPosY][cellPosX] = [food];
+    }
+
+
+    return food
 }
 
 /**
@@ -264,7 +374,7 @@ Game.prototype.makeFood = function() {
  */
 Game.prototype.renderFoods = function() {
     this.foods = this.foods.map(f => {
-        let isAlive = f.update(this.cell, this.clickClock, this.GAME_CLOCK);
+        let isAlive = f.update([this.cell, ...this.cellBots], this.clickClock, this.GAME_CLOCK);
         if (isAlive) return f;
         return this.makeFood(); // is dead then we create a new food
     });
