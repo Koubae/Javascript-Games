@@ -87,7 +87,7 @@ function Cell(game, x, y) {
     this.y = y;
     this.mass = 50;
     this.gravity = this.mass + this.mass / 2;
-    this.underOtherCellGravity = false,
+    this.underOtherCellGravity = false;
     this.velocityX = this.BASE_SPEED;
     this.velocityY = this.BASE_SPEED;
     this.lastMovementTimeStamp = 0;
@@ -179,77 +179,33 @@ Cell.prototype.update = function () {
 Cell.prototype._update = function() {
     if (this.isDead()) return false;
 
-    let leftTop = [(this.x - this.mass)+-this.gravity/2, (this.y - this.mass)+-this.gravity/2];
-    let rightTop = [(this.x + this.mass)+this.gravity/2, (this.y - this.mass)+-this.gravity/2];
-
-    let leftBottom = [(this.x - this.mass)+-this.gravity/2, (this.y + this.mass)+this.gravity/2];
-    let rightBottom = [(this.x + this.mass)+this.gravity/2, (this.y + this.mass)+this.gravity/2];
-
-    let left = [Math.floor((Math.max(0, leftTop[0] )) / 64), Math.floor((Math.max(0, rightTop[0] )) / 64)];
-    let top = [Math.floor((Math.max(0, leftTop[1] )) / 64), Math.floor((Math.max(0, rightBottom[1] )) / 64)];
-
-    if (this.game.constants.DEBUG) { // draw 4 dots around the cell which is the visual cell boundary where the cell can start detect other entities
-        circle(this.ctx, leftTop[0], leftTop[1], 2, "rgb(0, 0, 255)");
-        circle(this.ctx, rightTop[0], rightTop[1], 2, "rgb(0, 0, 255)");
-        circle(this.ctx, leftBottom[0], leftBottom[1], 2, "rgb(0, 0, 255)");
-        circle(this.ctx, rightBottom[0], rightBottom[1], 2, "rgb(0, 0, 255)");
-    }
+    const [left, top] = this._getMapCoordinates()
 
     let entityNextUpdate = new Set();
-    for (let a = top[0]; a < top[1]+1; a++) {
+    for (let indexY = top[0]; indexY < top[1]+1; indexY++) { // Iterate through the max matrix COLUMNS (Vertically)
         if (this.isDead()) break;
-        if (!(a in this.game.worldSections)) continue;
+        if (!(indexY in this.game.worldSections)) continue;
 
-        let cols = this.game.worldSections[a];
-        for (let i = left[0]; i < left[1]+1; i++) {
+        let cols = this.game.worldSections[indexY];
+        for (let indexX = left[0]; indexX < left[1]+1; indexX++) { // Iterate through the max matrix ROWS (Horizontally)
             if (this.isDead()) break;
-            if (!(i in cols)) continue;
+            if (!(indexX in cols)) continue;
 
-            let entities = cols[i];
-            for (let y = 0; y < entities.length; y ++) {
-                let entity = entities[y];
+            let entities = cols[indexX];
+            for (let entity of entities) {
+
                 if (entity === this) continue;
                 entity.underOtherCellGravity = true;
                 if (this.game.constants.DEBUG) entity.color = "rgb(255, 0, 0)";
 
                 if (this.gravity > entity.gravity) {
-                    let [distance, diffX, diffY] = calculateDistance(this, entity);
-                    if (checkEntityProximity(diffX, diffY, this.gravity)) {
-                        let isEaten = this.eat(entity, diffX, diffY);
-                        if (isEaten) {
-                            entity.die();
-                            continue;
-                        }
-
-                        let [gravityPullX, gravityPullY] = calculateGravityPull(
-                            [distance, diffX, diffY],
-                            entity,
-                            this
-                        );
-
-                        entity.x += gravityPullX;
-                        entity.y += gravityPullY;
-
-                    }
-
+                    const stillAlive = this.gravityPull(this, entity);
+                    if (!stillAlive) continue;
                 } else if (this.gravity < entity.gravity) {
-                    let [distance, diffX, diffY] = calculateDistance(entity, this);
-                    if (checkEntityProximity(diffX, diffY, entity.gravity)) {
-                        let isEaten = entity.eat(this, diffX, diffY);
-                        if (isEaten) {
-                            this.die();
-                            break;
-                        }
-
-                        let [gravityPullX, gravityPullY] = calculateGravityPull(
-                            [distance, diffX, diffY],
-                            this,
-                            entity
-                        );
-                        this.x += gravityPullX;
-                        this.y += gravityPullY;
-                    }
+                    const stillAlive = this.gravityPull(entity, this);
+                    if (!stillAlive) break;
                 }
+
                 this.game.removeEntityWorldChunk(entity);
                 entityNextUpdate.add(entity);
             }
@@ -283,6 +239,51 @@ Cell.prototype.changeDirection = function (directionX, directionY) {
     this.velocityX = (diff_x / distance) * speed;
     this.velocityY = (diff_y / distance) * speed;
 }
+
+Cell.prototype._getMapCoordinates = function() {
+    let leftTop = [(this.x - this.mass)+-this.gravity/2, (this.y - this.mass)+-this.gravity/2];
+    let rightTop = [(this.x + this.mass)+this.gravity/2, (this.y - this.mass)+-this.gravity/2];
+
+    let leftBottom = [(this.x - this.mass)+-this.gravity/2, (this.y + this.mass)+this.gravity/2];
+    let rightBottom = [(this.x + this.mass)+this.gravity/2, (this.y + this.mass)+this.gravity/2];
+
+    if (this.game.constants.DEBUG) { // draw 4 dots around the cell which is the visual cell boundary where the cell can start detect other entities
+        circle(this.ctx, leftTop[0], leftTop[1], 2, "rgb(0, 0, 255)");
+        circle(this.ctx, rightTop[0], rightTop[1], 2, "rgb(0, 0, 255)");
+        circle(this.ctx, leftBottom[0], leftBottom[1], 2, "rgb(0, 0, 255)");
+        circle(this.ctx, rightBottom[0], rightBottom[1], 2, "rgb(0, 0, 255)");
+    }
+
+    return [
+        this.game.calculateGameChunk(leftTop[0], rightTop[0]),
+        this.game.calculateGameChunk(leftTop[1], rightBottom[1])
+    ];
+}
+
+
+Cell.prototype.gravityPull = function(cellPulling, cellPulled) {
+    let [distance, diffX, diffY] = calculateDistance(cellPulling, cellPulled);
+    if (checkEntityProximity(diffX, diffY, cellPulling.gravity)) {
+        let isEaten = cellPulling.eat(cellPulled, diffX, diffY);
+        if (isEaten) {
+            cellPulled.die();
+            return false;
+        }
+
+        let [gravityPullX, gravityPullY] = calculateGravityPull(
+            [distance, diffX, diffY],
+            cellPulled,
+            cellPulling
+        );
+
+        cellPulled.x += gravityPullX;
+        cellPulled.y += gravityPullY;
+
+    }
+
+    return true;
+}
+
 
 /// Entity Actions
 Cell.prototype.eat = function (entity, diffX, diffY) {
@@ -322,6 +323,7 @@ Cell.prototype.eat = function (entity, diffX, diffY) {
 
 }
 
+
 /// Entity physics
 
 Cell.collisionWallType = 'stopMotion';
@@ -349,6 +351,7 @@ function Food(game, x, y) {
 }
 
 Food.prototype.draw = Cell.prototype.draw;
+Food.prototype._getMapCoordinates = Cell.prototype._getMapCoordinates;
 Food.prototype.die = Cell.prototype.die;
 Food.prototype.isDead = Cell.prototype.isDead;
 Food.prototype.update = function () {
@@ -362,7 +365,7 @@ Food.prototype.update = function () {
 }
 Food.prototype.animation = undefined;
 
-function CellBot(game, x, y) {
+function CellBot(game, x, y, animationType = 'bacteriaOne') {
     Cell.call(this, game, x, y);
     this.type = "cellBot";
     this.mass = random(25, 25);
@@ -370,7 +373,7 @@ function CellBot(game, x, y) {
     this.color = randomRGB();
     this.MAX_SPEED = 8;
 
-    this.animationType ='bacteriaOne';
+    this.animationType = animationType;
     if (this.animationType === 'almostExploding') {
         this.animation = animationAlmostExploding;
     } else if (this.animationType === 'doubleCellOne') {
@@ -408,7 +411,9 @@ CellBot.prototype.update = function () {
 }
 
 CellBot.prototype._update = Cell.prototype._update;
+CellBot.prototype._getMapCoordinates = Cell.prototype._getMapCoordinates;
 CellBot.prototype.eat = Cell.prototype.eat;
+CellBot.prototype.gravityPull = Cell.prototype.gravityPull;
 CellBot.prototype.changeDirection = Cell.prototype.changeDirection;
 
 /// Entity physics

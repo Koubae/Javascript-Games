@@ -146,7 +146,7 @@ function Game(canvas) {
         let cellBoot = new CellBot(
             this,
             700,
-            500
+            500,
         );
         this.addEntityWorldChunk(cellBoot);
     }
@@ -347,8 +347,8 @@ Game.prototype.removeEntityWorldChunk = function(entity) {
  */
 Game.prototype.calculateGameChunk = function(x, y) {
     return [
-        Math.floor(x / this.constants.CHUNK_SIZE),
-        Math.floor(y / this.constants.CHUNK_SIZE)
+        Math.floor(Math.max(0, x / this.constants.CHUNK_SIZE)),
+        Math.floor(Math.max(0, y / this.constants.CHUNK_SIZE))
     ];
 }
 
