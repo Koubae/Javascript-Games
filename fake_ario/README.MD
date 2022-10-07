@@ -1,6 +1,8 @@
 Fake Agar.io
 ============
 
+![img.png](img.png)
+
 Only a copy cat of the famous [agario.io](https://agar.io/?).
 
 **THIS IS ONLY A COPY!!!!** Go and play the original agar.io (I'm a player too),

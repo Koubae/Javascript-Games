@@ -10,15 +10,15 @@ function Game(canvas) {
     const DEBUG = false;
     const BACKGROUND_COLOR = `rgba(0, 0, 0)`;
     const BACKGROUND_TYPES = ["svg", "css"];
-    const BACKGROUND_TYPE = BACKGROUND_TYPES[0];
+    const BACKGROUND_TYPE = BACKGROUND_TYPES[1];
     const CHUNK_SIZE = 64;
 
     const FONT_SIZE = "55px";
     const FONT_FAMILY = "serif";
     const FONT_COLOR = `rgb(255, 255, 255)`;
 
-    const FOOD_COUNT = 350;
-    const BOTS_COUNT = 15;
+    const FOOD_COUNT = 650;
+    const BOTS_COUNT = 30;
 
     this.canvas = canvas;
     this.ctx = undefined;

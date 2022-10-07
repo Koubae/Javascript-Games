@@ -74,8 +74,8 @@ const GameEvents = {
     },
     resizeCanvas(e) {
 
-        this.game.screenWidth = window.innerWidth * 2;
-        this.game.screenHeight = window.innerHeight * 2;
+        this.game.screenWidth = window.innerWidth * 6;
+        this.game.screenHeight = window.innerHeight * 6;
         this.game.canvas.width = this.game.screenWidth;
         this.game.canvas.height = this.game.screenHeight;
 
