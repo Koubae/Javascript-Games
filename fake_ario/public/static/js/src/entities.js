@@ -176,6 +176,52 @@ Cell.prototype.update = function () {
 
 }
 
+/**
+ * Internal update of a Cell Entity.
+ *
+ * Kepp in mind that the map matrix Game.worldSections is an Object of Object and more object / array.
+ * Where the Y coordinates are the key of first level object and value are other object with X coordinates.
+ * The X coordintas - object contains an Array with the entities wich center are within a X,Y world Chunk coordinates
+ *
+ * Example.
+ * <code>
+ * Game.worldSections = {
+ *   1: {
+ *       12: [entity1, entity2, entityNth...],
+ *       15: [entity1, entity2, entityNth...],
+ *   }
+ *   15: {
+ *       12: [entity1, entity2, entityNth...],
+ *       15: [entity1, entity2, entityNth...],
+ *   }
+ * }
+ * </code>
+ *
+ * It goes in the following stage:
+ *
+ * 1) Get the Y (top to bottom) and X (left to right) index coordinates of the map matrix where the
+ *    cell currently is plus is gravitational pull range.
+ *
+ * 2) Iterate through the top (columns)
+ * 3) Iterate though the left (row)
+ * 4) Iterate though the entities withing the Array in current Y-X position
+ * 5) If the current entity's gravity is smaller than this cell,
+ *    then that entity can be eaten or only 'pulled' towards this cell gravity
+ * 6) If the current entity's gravity is greater than this cell,
+ *    then that entity can be eat or only 'pull' this cell
+ * 7) If either the 2 cells have equal gravity nothing happens
+ * 8) If the iterated, current entity is still alive than we remove it from the 'map matrix'
+ *      and add to the entity to update
+ * 9) Once all entity are checked within this cell gravitational pull, then the entities
+ *    to update are updated
+ *
+ * 10) finally, if this cell is still alive, we remove from the current matrix map,
+ *      update its position (and check for collisions) then add back this cell to the matrix map
+ *
+ *
+ * @returns {boolean}
+ * @private
+ */
 Cell.prototype._update = function() {
     if (this.isDead()) return false;
 
@@ -193,35 +239,39 @@ Cell.prototype._update = function() {
 
             let entities = cols[indexX];
             for (let entity of entities) {
-
                 if (entity === this) continue;
+
                 entity.underOtherCellGravity = true;
                 if (this.game.constants.DEBUG) entity.color = "rgb(255, 0, 0)";
 
-                if (this.gravity > entity.gravity) {
+                if (this.gravity > entity.gravity) { // current Cell can pull / eat near-by cells
                     const stillAlive = this.gravityPull(this, entity);
                     if (!stillAlive) continue;
-                } else if (this.gravity < entity.gravity) {
+                } else if (this.gravity < entity.gravity) { // near-by cell can pull / eat this cells
                     const stillAlive = this.gravityPull(entity, this);
                     if (!stillAlive) break;
                 }
-
+                // if this cell or the entity cell survived, then we remove it from the current map matrix
+                // (when cell dies, it removes its self already!)
                 this.game.removeEntityWorldChunk(entity);
                 entityNextUpdate.add(entity);
             }
         }
 
     }
-
+    // Add back the survived entities in the world map matrix
     entityNextUpdate.forEach(entity => {
         this.game.addEntityWorldChunk(entity);
     });
+    if (this.isDead()) return false;
 
-    this.game.removeEntityWorldChunk(this);
+    this.game.removeEntityWorldChunk(this); // remove previous position from map matrix
     this.collisionDetect();
     this.x += this.velocityX;
     this.y += this.velocityY;
-    this.game.addEntityWorldChunk(this);
+    this.game.addEntityWorldChunk(this);  // add back updated position in the map matrix
+
+    return true;
 
 }
 
